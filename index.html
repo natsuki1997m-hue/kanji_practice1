@@ -533,7 +533,7 @@ async function loadCard(id,code,n,col,char){
 function togAnim(id,code,col){ }
 function rstAnim(id,col){ }
 
-function mixPool(){let p=[];MX.lessons.forEach(l=>FLASH[l].forEach((w,i)=>p.push({w,l,i})));return p;}
+function mixPool(){let p=[];MX.lessons.forEach(l=>FLASH[l].forEach((w,i)=>{if(chk[l+'-'+i])p.push({w,l,i});}));return p;}
 function renderMix(){
   if(!MX.started){
     const pool=mixPool(),mx=Math.min(50,pool.length);
@@ -653,7 +653,7 @@ function rstAnim(id,col){
 }
 
 /* ── MIX ── */
-function mixPool(){let p=[];MX.lessons.forEach(l=>FLASH[l].forEach((w,i)=>p.push({w,l,i})));return p;}
+function mixPool(){let p=[];MX.lessons.forEach(l=>FLASH[l].forEach((w,i)=>{if(chk[l+'-'+i])p.push({w,l,i});}));return p;}
 function renderMix(){
   if(!MX.started){
     const pool=mixPool(),mx=Math.min(50,pool.length);
