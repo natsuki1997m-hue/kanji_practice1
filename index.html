@@ -779,54 +779,141 @@ function showWorksheetDialog(name,weak){
   const existing=document.getElementById('wsDialog');
   if(existing)existing.remove();
 
+  const UNITS=Object.keys(FLASH).sort((a,b)=>parseInt(a)-parseInt(b));
+
   const allByUnit={};
-  Object.keys(FLASH).forEach(l=>{
+  UNITS.forEach(l=>{
     allByUnit[l]=FLASH[l].map(w=>({word:w.k,reading:w.r,meaning:w.e}));
   });
 
   let wsMode='still_learning';
-  let wsSelectedUnit=Object.keys(allByUnit)[0]||'3';
+  let wsSelectedUnit=UNITS[0]||'3';
+  let wsCustomUnit=UNITS[0]||'3';
   let wsCustomSelected=new Set(weak.map(w=>w.word+'|'+w.reading));
+  const parts={1:{on:true,n:6},2:{on:true,n:6},3:{on:true,n:6},4:{on:true,n:6}};
+
+  function esc(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 
   function getPool(){
     if(wsMode==='still_learning')return weak;
     if(wsMode==='by_unit')return allByUnit[wsSelectedUnit]||[];
     if(wsMode==='custom'){
-      const all=[];
-      Object.keys(FLASH).forEach(l=>FLASH[l].forEach(w=>{
-        if(wsCustomSelected.has(w.k+'|'+w.r))all.push({word:w.k,reading:w.r,meaning:w.e});
+      const all=[],seen=new Set();
+      UNITS.forEach(l=>FLASH[l].forEach(w=>{
+        const key=w.k+'|'+w.r;
+        if(wsCustomSelected.has(key)&&!seen.has(key)){
+          seen.add(key);
+          all.push({word:w.k,reading:w.r,meaning:w.e});
+        }
       }));
       return all;
     }
     return weak;
   }
 
+  function unitSelCount(l){
+    return FLASH[l].filter(w=>wsCustomSelected.has(w.k+'|'+w.r)).length;
+  }
+
+  // ---- custom select: unit tabs ----
+  function customTabsHTML(){
+    return UNITS.map(l=>{
+      const on=String(wsCustomUnit)===String(l);
+      const n=unitSelCount(l);
+      const col=HEX[l]||'#222';
+      return `<button id="wsTab${l}" onclick="wsCustomTab('${l}')" style="position:relative;padding:5px 12px;border-radius:99px;border:2px solid ${on?col:'#ddd'};background:${on?col:'#fff'};color:${on?'#fff':'#666'};font-family:var(--ui);font-weight:800;font-size:12px;cursor:pointer;">U${l}<span id="wsTabCount${l}" style="margin-left:5px;font-size:10px;font-weight:900;color:${on?'#fff':col};">${n?n:''}</span></button>`;
+    }).join('');
+  }
+
+  // ---- custom select: word list for the active unit only ----
+  function customListHTML(){
+    const l=wsCustomUnit;
+    const col=HEX[l]||'#222';
+    let h='';
+    (FLASH[l]||[]).forEach(w=>{
+      const key=w.k+'|'+w.r;
+      const checked=wsCustomSelected.has(key);
+      h+=`<label onclick="event.preventDefault();wsToggleWord('${esc(key)}',this)" style="display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:8px;cursor:pointer;font-size:12px;background:${checked?'#fff7f5':'transparent'};">
+        <input type="checkbox" ${checked?'checked':''} style="width:13px;height:13px;pointer-events:none;flex:none;">
+        <span style="font-family:'BIZ UDMincho','Noto Serif JP',serif;font-size:15px;color:${col};">${w.k}</span>
+        <span style="color:#888;font-size:11px;">${w.r}</span>
+        <span style="color:#aaa;font-size:11px;margin-left:auto;text-align:right;">${w.e}</span>
+      </label>`;
+    });
+    return h||'<div style="color:#bbb;font-size:12px;padding:8px;">No words</div>';
+  }
+
+  function customPanelHTML(){
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;">
+        <div id="wsSelCount" style="font-size:11px;font-weight:900;color:#888;letter-spacing:.06em;text-transform:uppercase;">${wsCustomSelected.size} words selected</div>
+        <div style="display:flex;gap:6px;flex:none;">
+          <button onclick="wsSelectAllWords()" style="font-size:11px;padding:3px 10px;border-radius:99px;border:2px solid #222;background:#222;color:#fff;font-family:var(--ui);font-weight:800;cursor:pointer;">All</button>
+          <button onclick="wsClearAllWords()" style="font-size:11px;padding:3px 10px;border-radius:99px;border:2px solid #ddd;background:#fff;color:#666;font-family:var(--ui);font-weight:800;cursor:pointer;">Clear</button>
+        </div>
+      </div>
+      <div id="wsCustomTabs" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;">${customTabsHTML()}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div id="wsUnitInfo" style="font-size:11px;color:#aaa;">U${wsCustomUnit} — <span id="wsUnitSel">${unitSelCount(wsCustomUnit)}</span>/${(FLASH[wsCustomUnit]||[]).length} selected</div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="wsUnitAll(1)" style="font-size:10px;padding:3px 9px;border-radius:99px;border:2px solid #ddd;background:#fff;color:#666;font-family:var(--ui);font-weight:800;cursor:pointer;">Select unit</button>
+          <button onclick="wsUnitAll(0)" style="font-size:10px;padding:3px 9px;border-radius:99px;border:2px solid #ddd;background:#fff;color:#666;font-family:var(--ui);font-weight:800;cursor:pointer;">Clear unit</button>
+        </div>
+      </div>
+      <div id="wsCustomList" style="height:240px;overflow-y:auto;border:1px solid #eee;border-radius:10px;padding:8px;margin-bottom:12px;-webkit-overflow-scrolling:touch;">${customListHTML()}</div>`;
+  }
+
+  // ---- in-place refresh (no full re-render → no scroll jump) ----
+  function wsUpdateCounts(){
+    const total=getPool().length;
+    const maxQ=Math.min(Math.max(total,2),15);
+    const c=document.getElementById('wsSelCount');
+    if(c)c.textContent=wsCustomSelected.size+' words selected';
+    UNITS.forEach(l=>{
+      const b=document.getElementById('wsTabCount'+l);
+      if(b){const n=unitSelCount(l);b.textContent=n?String(n):'';}
+    });
+    const us=document.getElementById('wsUnitSel');
+    if(us)us.textContent=unitSelCount(wsCustomUnit);
+    ['1','2','3','4'].forEach(n=>{
+      const sl=document.getElementById('ws'+n+'n');
+      if(sl){
+        sl.max=maxQ;
+        if(parseInt(sl.value)>maxQ)sl.value=maxQ;
+        parts[n].n=parseInt(sl.value);
+        const el=document.getElementById('ws'+n+'val');
+        if(el)el.textContent=sl.value+' questions';
+      }
+    });
+    const warn=document.getElementById('wsWarn');
+    if(warn)warn.style.display=total===0?'block':'none';
+    const gen=document.getElementById('wsGenBtn');
+    if(gen){
+      gen.disabled=total===0;
+      gen.style.opacity=total===0?'.4':'1';
+      gen.style.cursor=total===0?'not-allowed':'pointer';
+    }
+  }
+
+  function syncParts(){
+    ['1','2','3','4'].forEach(n=>{
+      const cb=document.getElementById('ws'+n+'on');
+      const sl=document.getElementById('ws'+n+'n');
+      if(cb)parts[n].on=cb.checked;
+      if(sl)parts[n].n=parseInt(sl.value);
+    });
+  }
+
   function renderDialog(){
     const inner=document.getElementById('wsInner');
     if(!inner)return;
+    const keepScroll=inner.scrollTop;
     const pool=getPool();
     const total=pool.length;
     const maxQ=Math.min(Math.max(total,2),15);
+    const pv=n=>Math.min(parts[n].n,maxQ);
 
-    let customHTML='';
-    if(wsMode==='custom'){
-      customHTML='<div style="max-height:220px;overflow-y:auto;border:1px solid #eee;border-radius:10px;padding:8px;margin-bottom:12px;">';
-      Object.keys(FLASH).forEach(l=>{
-        const col=HEX[l];
-        customHTML+=`<div style="font-size:11px;font-weight:900;color:${col};margin:8px 0 4px;letter-spacing:.06em;">U${l}</div>`;
-        FLASH[l].forEach(w=>{
-          const key=w.k+'|'+w.r;
-          const checked=wsCustomSelected.has(key);
-          customHTML+=`<label style="display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:8px;cursor:pointer;font-size:12px;background:${checked?'#fff7f5':'transparent'};" onclick="event.preventDefault();wsToggleWord('${key}')">
-            <input type="checkbox" ${checked?'checked':''} style="width:13px;height:13px;pointer-events:none;">
-            <span style="font-family:'BIZ UDMincho','Noto Serif JP',serif;font-size:15px;color:${col};">${w.k}</span>
-            <span style="color:#888;font-size:11px;">${w.r}</span>
-            <span style="color:#aaa;font-size:11px;margin-left:auto;">${w.e}</span>
-          </label>`;
-        });
-      });
-      customHTML+='</div>';
-    }
+    const partRow=(n,label)=>`<div style="background:#f8f8f8;border-radius:12px;padding:12px 14px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><label style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:13px;cursor:pointer;"><input type="checkbox" id="ws${n}on" ${parts[n].on?'checked':''} style="width:15px;height:15px;"> ${label}</label><span style="font-size:11px;color:#aaa;" id="ws${n}val">${pv(n)} questions</span></div><input type="range" id="ws${n}n" min="2" max="${maxQ}" value="${pv(n)}" style="width:100%;accent-color:#FF6B35;" oninput="document.getElementById('ws${n}val').textContent=this.value+' questions'"></div>`;
 
     inner.innerHTML=`
       <div style="font-size:18px;font-weight:900;margin-bottom:4px;">📄 Worksheet</div>
@@ -841,54 +928,104 @@ function showWorksheetDialog(name,weak){
 
       ${wsMode==='by_unit'?`
         <div style="font-size:11px;font-weight:900;color:#888;margin-bottom:8px;letter-spacing:.06em;text-transform:uppercase;">Unit</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
-          ${[3,4,5,6,7,8,9,10,11,12].map(l=>`<button onclick="wsSetUnit(${l})" style="padding:5px 12px;border-radius:99px;border:2px solid ${parseInt(wsSelectedUnit)===l?HEX[l]:'#ddd'};background:${parseInt(wsSelectedUnit)===l?HEX[l]:'#fff'};color:${parseInt(wsSelectedUnit)===l?'#fff':'#666'};font-family:var(--ui);font-weight:800;font-size:12px;cursor:pointer;">U${l}</button>`).join('')}
+        <div id="wsUnitTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+          ${UNITS.map(l=>`<button id="wsUTab${l}" onclick="wsSetUnit('${l}')" style="padding:5px 12px;border-radius:99px;border:2px solid ${String(wsSelectedUnit)===String(l)?HEX[l]:'#ddd'};background:${String(wsSelectedUnit)===String(l)?HEX[l]:'#fff'};color:${String(wsSelectedUnit)===String(l)?'#fff':'#666'};font-family:var(--ui);font-weight:800;font-size:12px;cursor:pointer;">U${l}</button>`).join('')}
         </div>
-        <div style="font-size:12px;color:#aaa;margin-bottom:16px;">${(allByUnit[wsSelectedUnit]||[]).length} words in U${wsSelectedUnit}</div>
+        <div id="wsUnitCount" style="font-size:12px;color:#aaa;margin-bottom:16px;">${(allByUnit[wsSelectedUnit]||[]).length} words in U${wsSelectedUnit}</div>
       `:''}
 
-      ${wsMode==='custom'?`
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <div style="font-size:11px;font-weight:900;color:#888;letter-spacing:.06em;text-transform:uppercase;">${wsCustomSelected.size} words selected</div>
-          <div style="display:flex;gap:6px;">
-            <button onclick="wsSelectAllWords()" style="font-size:11px;padding:3px 10px;border-radius:99px;border:2px solid #222;background:#222;color:#fff;font-family:var(--ui);font-weight:800;cursor:pointer;">All</button>
-            <button onclick="wsClearAllWords()" style="font-size:11px;padding:3px 10px;border-radius:99px;border:2px solid #ddd;background:#fff;color:#666;font-family:var(--ui);font-weight:800;cursor:pointer;">Clear</button>
-          </div>
-        </div>
-        ${customHTML}
-      `:''}
+      ${wsMode==='custom'?`<div id="wsCustomPanel">${customPanelHTML()}</div>`:''}
 
       <div style="font-size:11px;font-weight:900;color:#888;margin-bottom:10px;letter-spacing:.06em;text-transform:uppercase;">Parts</div>
       <div style="display:flex;flex-direction:column;gap:10px;">
-        <div style="background:#f8f8f8;border-radius:12px;padding:12px 14px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><label style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:13px;cursor:pointer;"><input type="checkbox" id="ws1on" checked style="width:15px;height:15px;"> Part 1 — Match kanji with reading</label><span style="font-size:11px;color:#aaa;" id="ws1val"></span></div><input type="range" id="ws1n" min="2" max="${maxQ}" value="${Math.min(6,maxQ)}" style="width:100%;accent-color:#FF6B35;" oninput="document.getElementById('ws1val').textContent=this.value+' questions'"></div>
-        <div style="background:#f8f8f8;border-radius:12px;padding:12px 14px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><label style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:13px;cursor:pointer;"><input type="checkbox" id="ws2on" checked style="width:15px;height:15px;"> Part 2 — Write kanji from reading</label><span style="font-size:11px;color:#aaa;" id="ws2val"></span></div><input type="range" id="ws2n" min="2" max="${maxQ}" value="${Math.min(6,maxQ)}" style="width:100%;accent-color:#FF6B35;" oninput="document.getElementById('ws2val').textContent=this.value+' questions'"></div>
-        <div style="background:#f8f8f8;border-radius:12px;padding:12px 14px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><label style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:13px;cursor:pointer;"><input type="checkbox" id="ws3on" checked style="width:15px;height:15px;"> Part 3 — Kanji AND reading from English</label><span style="font-size:11px;color:#aaa;" id="ws3val"></span></div><input type="range" id="ws3n" min="2" max="${maxQ}" value="${Math.min(6,maxQ)}" style="width:100%;accent-color:#FF6B35;" oninput="document.getElementById('ws3val').textContent=this.value+' questions'"></div>
-        <div style="background:#f8f8f8;border-radius:12px;padding:12px 14px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><label style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:13px;cursor:pointer;"><input type="checkbox" id="ws4on" checked style="width:15px;height:15px;"> Part 4 — Make a sentence</label><span style="font-size:11px;color:#aaa;" id="ws4val"></span></div><input type="range" id="ws4n" min="2" max="${maxQ}" value="${Math.min(6,maxQ)}" style="width:100%;accent-color:#FF6B35;" oninput="document.getElementById('ws4val').textContent=this.value+' questions'"></div>
+        ${partRow(1,'Part 1 — Match kanji with reading')}
+        ${partRow(2,'Part 2 — Write kanji from reading')}
+        ${partRow(3,'Part 3 — Kanji AND reading from English')}
+        ${partRow(4,'Part 4 — Make a sentence')}
       </div>
 
-      ${total===0?`<div style="margin-top:12px;padding:10px;background:#fff7f5;border-radius:10px;color:#FF6B35;font-size:13px;font-weight:700;">⚠️ No words selected!</div>`:''}
+      <div id="wsWarn" style="display:${total===0?'block':'none'};margin-top:12px;padding:10px;background:#fff7f5;border-radius:10px;color:#FF6B35;font-size:13px;font-weight:700;">⚠️ No words selected!</div>
 
       <div style="display:flex;gap:10px;margin-top:16px;">
         <button onclick="document.getElementById('wsDialog').remove()" style="flex:1;padding:12px;border-radius:12px;border:2px solid #eee;background:#fff;font-family:var(--ui);font-weight:700;cursor:pointer;">Cancel</button>
-        <button onclick="generateWorksheet('${name.replace(/'/g,"\'")}',window._wsGetPool())" ${total===0?'disabled':''} style="flex:2;padding:12px;border-radius:12px;border:none;background:#FF6B35;color:#fff;font-family:var(--ui);font-weight:800;font-size:14px;cursor:pointer;">Generate PDF →</button>
+        <button id="wsGenBtn" onclick="generateWorksheet('${esc(name)}',window._wsGetPool())" ${total===0?'disabled':''} style="flex:2;padding:12px;border-radius:12px;border:none;background:#FF6B35;color:#fff;font-family:var(--ui);font-weight:800;font-size:14px;cursor:${total===0?'not-allowed':'pointer'};opacity:${total===0?'.4':'1'};">Generate PDF →</button>
       </div>`;
 
-    ['1','2','3','4'].forEach(n=>{
-      const el=document.getElementById('ws'+n+'val');
-      const sl=document.getElementById('ws'+n+'n');
-      if(el&&sl)el.textContent=sl.value+' questions';
-    });
+    inner.scrollTop=keepScroll;
   }
 
-  window.wsSetMode=m=>{wsMode=m;renderDialog();};
-  window.wsSetUnit=l=>{wsSelectedUnit=String(l);renderDialog();};
-  window.wsToggleWord=key=>{
+  window.wsSetMode=m=>{syncParts();wsMode=m;renderDialog();};
+
+  window.wsSetUnit=l=>{
+    wsSelectedUnit=String(l);
+    UNITS.forEach(k=>{
+      const b=document.getElementById('wsUTab'+k);
+      if(!b)return;
+      const on=String(k)===String(wsSelectedUnit);
+      b.style.borderColor=on?HEX[k]:'#ddd';
+      b.style.background=on?HEX[k]:'#fff';
+      b.style.color=on?'#fff':'#666';
+    });
+    const c=document.getElementById('wsUnitCount');
+    if(c)c.textContent=`${(allByUnit[wsSelectedUnit]||[]).length} words in U${wsSelectedUnit}`;
+    wsUpdateCounts();
+  };
+
+  window.wsCustomTab=l=>{
+    wsCustomUnit=String(l);
+    UNITS.forEach(k=>{
+      const b=document.getElementById('wsTab'+k);
+      if(!b)return;
+      const on=String(k)===String(wsCustomUnit);
+      const col=HEX[k]||'#222';
+      b.style.borderColor=on?col:'#ddd';
+      b.style.background=on?col:'#fff';
+      b.style.color=on?'#fff':'#666';
+      const cnt=document.getElementById('wsTabCount'+k);
+      if(cnt)cnt.style.color=on?'#fff':col;
+    });
+    const info=document.getElementById('wsUnitInfo');
+    if(info)info.innerHTML=`U${wsCustomUnit} — <span id="wsUnitSel">${unitSelCount(wsCustomUnit)}</span>/${(FLASH[wsCustomUnit]||[]).length} selected`;
+    const list=document.getElementById('wsCustomList');
+    if(list){list.innerHTML=customListHTML();list.scrollTop=0;}
+  };
+
+  window.wsToggleWord=(key,el)=>{
     if(wsCustomSelected.has(key))wsCustomSelected.delete(key);
     else wsCustomSelected.add(key);
-    renderDialog();
+    const on=wsCustomSelected.has(key);
+    if(el){
+      el.style.background=on?'#fff7f5':'transparent';
+      const cb=el.querySelector('input[type=checkbox]');
+      if(cb)cb.checked=on;
+    }
+    wsUpdateCounts();
   };
-  window.wsSelectAllWords=()=>{Object.keys(FLASH).forEach(l=>FLASH[l].forEach(w=>wsCustomSelected.add(w.k+'|'+w.r)));renderDialog();};
-  window.wsClearAllWords=()=>{wsCustomSelected.clear();renderDialog();};
+
+  window.wsUnitAll=flag=>{
+    (FLASH[wsCustomUnit]||[]).forEach(w=>{
+      const key=w.k+'|'+w.r;
+      if(flag)wsCustomSelected.add(key);else wsCustomSelected.delete(key);
+    });
+    const list=document.getElementById('wsCustomList');
+    if(list){const st=list.scrollTop;list.innerHTML=customListHTML();list.scrollTop=st;}
+    wsUpdateCounts();
+  };
+
+  window.wsSelectAllWords=()=>{
+    UNITS.forEach(l=>FLASH[l].forEach(w=>wsCustomSelected.add(w.k+'|'+w.r)));
+    const list=document.getElementById('wsCustomList');
+    if(list){const st=list.scrollTop;list.innerHTML=customListHTML();list.scrollTop=st;}
+    wsUpdateCounts();
+  };
+
+  window.wsClearAllWords=()=>{
+    wsCustomSelected.clear();
+    const list=document.getElementById('wsCustomList');
+    if(list){const st=list.scrollTop;list.innerHTML=customListHTML();list.scrollTop=st;}
+    wsUpdateCounts();
+  };
+
   window._wsGetPool=getPool;
 
   const overlay=document.createElement('div');
