@@ -180,6 +180,7 @@ body{font-family:var(--ui);background:#f8f9ff;min-height:100vh;display:flex;flex
 <script src="examples-data.js"></script>
 <script src="examples-misc.js"></script>
 <script src="examples-adj.js"></script>
+<script src="examples-ui.js"></script>
 <script>
 // ── Supabase ──────────────────────────────────────────────
 const SUPA_URL='https://ozxlahysxpvxtzznzdoj.supabase.co';
@@ -997,7 +998,8 @@ function showWorksheetDialog(name,weak){
           <button onclick="wsSetP5Mode('easy')" style="padding:5px 12px;border-radius:99px;border:2px solid ${wsP5Mode==='easy'?'#FF6B35':'#ddd'};background:${wsP5Mode==='easy'?'#FF6B35':'#fff'};color:${wsP5Mode==='easy'?'#fff':'#666'};font-family:var(--ui);font-weight:800;font-size:12px;cursor:pointer;">Easy — translate a sentence</button>
           <button onclick="wsSetP5Mode('hard')" style="padding:5px 12px;border-radius:99px;border:2px solid ${wsP5Mode==='hard'?'#FF6B35':'#ddd'};background:${wsP5Mode==='hard'?'#FF6B35':'#fff'};color:${wsP5Mode==='hard'?'#fff':'#666'};font-family:var(--ui);font-weight:800;font-size:12px;cursor:pointer;">Difficult — word + grammar only</button>
         </div>
-        <div style="font-size:11px;color:#aaa;margin:6px 0 12px;line-height:1.5;">${wsP5Mode==='easy'?'Easy: an English sentence is shown and the student writes it in Japanese, using the kanji word and the grammar. Words that have no natural example sentence yet are skipped in this mode.':'Difficult: only the kanji word and the grammar are shown; the student makes the sentence. A sample answer is added to the answer key when one is available.'}</div>
+        <div style="font-size:11px;color:#aaa;margin:6px 0 12px;line-height:1.5;">${wsP5Mode==='easy'?'Easy: an English sentence is shown and the student writes it in Japanese, using the kanji word and the grammar. Words with no example sentence are skipped — add your own with the button below.':'Difficult: only the kanji word and the grammar are shown; the student makes the sentence. A sample answer is added to the answer key when one is available.'}</div>
+        <button onclick="openExampleManager()" style="margin:0 0 12px;padding:7px 14px;border-radius:10px;border:2px solid #FF6B35;background:#fff;color:#FF6B35;font-family:var(--ui);font-weight:800;font-size:12px;cursor:pointer;">✏️ My example sentences (${(window.EX&&EX.custom?EX.custom().length:0)})</button>
         <div style="font-size:11px;font-weight:900;color:#888;margin-bottom:6px;letter-spacing:.06em;text-transform:uppercase;">Part 5 grammar range</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button onclick="wsSetGramScope('all')" style="padding:5px 12px;border-radius:99px;border:2px solid ${wsGramScope==='all'?'#FF6B35':'#ddd'};background:${wsGramScope==='all'?'#FF6B35':'#fff'};color:${wsGramScope==='all'?'#fff':'#666'};font-family:var(--ui);font-weight:800;font-size:12px;cursor:pointer;">All learned</button>
@@ -1020,6 +1022,7 @@ function showWorksheetDialog(name,weak){
   window.wsSetMode=m=>{syncParts();wsMode=m;renderDialog();};
 
   window.wsSetGramScope=s=>{syncParts();wsGramScope=s;window._wsGramScope=s;renderDialog();};
+  window.wsRefresh=()=>{syncParts();renderDialog();};
   window.wsSetP5Mode=m=>{syncParts();wsP5Mode=m;window._wsP5Mode=m;renderDialog();};
 
   window._wsGramOpenSet=o=>{wsGramOpen=!!o;};

@@ -144,9 +144,18 @@ vpg('Do things like ~ and ~','l',v=>{
 vpg('Have done ~ before','x',v=>[v.J.ta+'ことがあります。','I have '+E(v,'ppx')+' before.']);
 
 // ───────── public API ─────────
+// Teacher-registered examples (examples-ui.js overrides EX.custom): [{id,word,g,ja,en}]
+EX.custom=()=>[];
+EX.customFor=(word,label)=>EX.custom().filter(c=>c.word===word&&(!label||c.g===label));
 // Which grammar labels have at least one natural example for this word?
-EX.labelsFor=(word)=>Object.keys(EX.GR).filter(l=>EX.GR[l].some(fn=>{try{return !!fn(word);}catch(e){return false;}}));
+EX.labelsFor=(word)=>{
+  const set=new Set(Object.keys(EX.GR).filter(l=>EX.GR[l].some(fn=>{try{return !!fn(word);}catch(e){return false;}})));
+  EX.customFor(word).forEach(c=>set.add(c.g));
+  return [...set];
+};
 EX.make=(word,label)=>{
+  const cu=EX.customFor(word,label);
+  if(cu.length){const c=pickR(cu);return {ja:c.ja,en:c.en,custom:true};}
   const fns=shufR(EX.GR[label]||[]);
   for(const fn of fns){let r=null;try{r=fn(word);}catch(e){r=null;}if(r)return {ja:r[0],en:r[1]};}
   return null;
