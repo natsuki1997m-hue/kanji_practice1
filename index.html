@@ -1290,11 +1290,12 @@ function generateWorksheet(name,weak){
       let cands=fits.filter(g=>gramSel.has(g.p));
       if(cands.length===0)cands=fits;
       if(cands.length===0)continue; // no natural grammar for this word → skip it
+      const poolAll=cands.map(x=>x.en); // every grammar this word can take (used by the 🔄 re-roll button)
       const fresh=cands.filter(g=>!usedGram.has(g.p));
       if(fresh.length>0)cands=fresh;
       const g=cands[Math.floor(Math.random()*cands.length)];
       usedGram.add(g.p);
-      p5items.push({w,g,lesson,type});
+      p5items.push({w,g,lesson,type,pool:poolAll});
     }
   }
 
@@ -1331,7 +1332,10 @@ function generateWorksheet(name,weak){
     .match-r{width:40%;padding-left:12px;color:#555;}
     .sent-line{border-bottom:1.5px solid #555;display:block;width:100%;height:24px;margin-top:8px;}
     .sent-row td{padding:12px 6px 10px;}
-    @media print{body{padding:20px 28px;}}
+    .reroll{margin-left:8px;border:1.5px solid #FF6B35;background:#fff;color:#FF6B35;border-radius:6px;padding:1px 8px;font-size:13px;font-weight:700;cursor:pointer;vertical-align:middle;}
+    .reroll:hover{background:#FF6B35;color:#fff;}
+    .reroll[disabled]{opacity:.35;cursor:not-allowed;}
+    @media print{body{padding:20px 28px;}.no-print{display:none!important;}}
   </style></head><body>`;
 
   out+=`<div class="header">
@@ -1441,6 +1445,7 @@ function generateWorksheet(name,weak){
       <div class="part-label"><span class="part-pill">Part ${partNum}</span></div>
       <div class="part-box">
         <div class="inst">Make a sentence using BOTH the kanji word and the grammar. Write the kanji word in kanji.</div>
+        <div class="no-print" style="font-size:11px;color:#aaa;margin:-6px 0 8px;">🔄 = pick a different grammar for that question (shown on screen only, not printed)</div>
         <table>`;
     p5items.forEach((it,i)=>{
       const w=it.w,g=it.g;
@@ -1449,7 +1454,7 @@ function generateWorksheet(name,weak){
         <td class="num" style="vertical-align:top;padding-top:14px;">${i+1}.</td>
         <td>
           <div style="margin-bottom:4px;"><span class="kanji">${w.word}</span> <span style="font-size:12px;color:#888;">(${w.reading})</span>${meaning?` <span style="font-size:11px;color:#aaa;">— ${meaning}</span>`:''}</div>
-          <div style="margin-bottom:2px;"><span style="display:inline-block;background:#fff;border:1.5px solid #FF6B35;color:#FF6B35;border-radius:6px;padding:1px 10px;font-weight:700;font-size:13px;">${g.en}</span></div>
+          <div style="margin-bottom:2px;"><span style="display:inline-block;background:#fff;border:1.5px solid #FF6B35;color:#FF6B35;border-radius:6px;padding:1px 10px;font-weight:700;font-size:13px;" id="g5_${i}">${g.en}</span><button class="no-print reroll" id="rr${i}" onclick="reroll(${i})" title="Pick a different grammar">🔄</button></div>
           <span class="sent-line"></span>
         </td>
       </tr>`;
@@ -1457,6 +1462,17 @@ function generateWorksheet(name,weak){
     out+=`</table></div></div>`;
   }
 
+  if(p5on&&p5items.length>0){
+    const p5data=JSON.stringify(p5items.map(it=>({cur:it.g.en,pool:it.pool}))).replace(/</g,'\\u003c');
+    out+='<script>var P5='+p5data+';'
+      +'function reroll(i){var it=P5[i];var used={};P5.forEach(function(x,j){if(j!==i)used[x.cur]=1;});'
+      +'var c=it.pool.filter(function(e){return e!==it.cur&&!used[e];});'
+      +'if(!c.length)c=it.pool.filter(function(e){return e!==it.cur;});'
+      +'if(!c.length)return;it.cur=c[Math.floor(Math.random()*c.length)];'
+      +'document.getElementById("g5_"+i).textContent=it.cur;}'
+      +'P5.forEach(function(it,i){if(it.pool.length<=1){var b=document.getElementById("rr"+i);if(b){b.disabled=true;b.title="No other grammar fits this word";}}});'
+      +'<\/script>';
+  }
   out+=`<script>window.onload=()=>setTimeout(()=>window.print(),400);<\/script>`;
   out+=`</body></html>`;
 
