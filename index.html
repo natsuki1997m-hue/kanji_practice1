@@ -176,6 +176,10 @@ body{font-family:var(--ui);background:#f8f9ff;min-height:100vh;display:flex;flex
 </nav>
 <div class="main" id="mainArea"></div>
 
+<script src="examples.js"></script>
+<script src="examples-data.js"></script>
+<script src="examples-misc.js"></script>
+<script src="examples-adj.js"></script>
 <script>
 // ── Supabase ──────────────────────────────────────────────
 const SUPA_URL='https://ozxlahysxpvxtzznzdoj.supabase.co';
@@ -793,6 +797,8 @@ function showWorksheetDialog(name,weak){
   const parts={1:{on:true,n:6},2:{on:true,n:6},3:{on:true,n:6},4:{on:true,n:6},5:{on:false,n:5}};
   let wsGramScope='all';
   window._wsGramScope='all';
+  let wsP5Mode='easy';          // 'easy' = translate a natural English sentence · 'hard' = word + grammar only
+  window._wsP5Mode='easy';
   let wsGramOpen=false;
   const wsGramSel=new Set(GENKI_GRAMMAR.map(g=>g.p)); // grammar points allowed in Part 5 (default: all)
   window._wsGramSel=wsGramSel;
@@ -986,6 +992,12 @@ function showWorksheetDialog(name,weak){
         ${partRow(5,'Part 5 — Kanji + Grammar sentence')}
       </div>
       <div style="margin-top:8px;padding:10px 14px;background:#fff7f5;border-radius:12px;">
+        <div style="font-size:11px;font-weight:900;color:#888;margin-bottom:6px;letter-spacing:.06em;text-transform:uppercase;">Part 5 mode</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button onclick="wsSetP5Mode('easy')" style="padding:5px 12px;border-radius:99px;border:2px solid ${wsP5Mode==='easy'?'#FF6B35':'#ddd'};background:${wsP5Mode==='easy'?'#FF6B35':'#fff'};color:${wsP5Mode==='easy'?'#fff':'#666'};font-family:var(--ui);font-weight:800;font-size:12px;cursor:pointer;">Easy — translate a sentence</button>
+          <button onclick="wsSetP5Mode('hard')" style="padding:5px 12px;border-radius:99px;border:2px solid ${wsP5Mode==='hard'?'#FF6B35':'#ddd'};background:${wsP5Mode==='hard'?'#FF6B35':'#fff'};color:${wsP5Mode==='hard'?'#fff':'#666'};font-family:var(--ui);font-weight:800;font-size:12px;cursor:pointer;">Difficult — word + grammar only</button>
+        </div>
+        <div style="font-size:11px;color:#aaa;margin:6px 0 12px;line-height:1.5;">${wsP5Mode==='easy'?'Easy: an English sentence is shown and the student writes it in Japanese, using the kanji word and the grammar. Words that have no natural example sentence yet are skipped in this mode.':'Difficult: only the kanji word and the grammar are shown; the student makes the sentence. A sample answer is added to the answer key when one is available.'}</div>
         <div style="font-size:11px;font-weight:900;color:#888;margin-bottom:6px;letter-spacing:.06em;text-transform:uppercase;">Part 5 grammar range</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button onclick="wsSetGramScope('all')" style="padding:5px 12px;border-radius:99px;border:2px solid ${wsGramScope==='all'?'#FF6B35':'#ddd'};background:${wsGramScope==='all'?'#FF6B35':'#fff'};color:${wsGramScope==='all'?'#fff':'#666'};font-family:var(--ui);font-weight:800;font-size:12px;cursor:pointer;">All learned</button>
@@ -1008,6 +1020,7 @@ function showWorksheetDialog(name,weak){
   window.wsSetMode=m=>{syncParts();wsMode=m;renderDialog();};
 
   window.wsSetGramScope=s=>{syncParts();wsGramScope=s;window._wsGramScope=s;renderDialog();};
+  window.wsSetP5Mode=m=>{syncParts();wsP5Mode=m;window._wsP5Mode=m;renderDialog();};
 
   window._wsGramOpenSet=o=>{wsGramOpen=!!o;};
 
@@ -1274,8 +1287,11 @@ function generateWorksheet(name,weak){
   const p3words=p3on?pick(p3n):[];
   const p4words=p4on?pick(p4n):[];
   // Part 5: pair each kanji word with a grammar point that (1) the student has already learned
-  // (Lesson N kanji → grammar from Lessons 1..N-1 only) and (2) fits the word's type, so the
-  // combination makes a natural sentence (e.g. a noun never gets "na-adjective, present").
+  // (Lesson N kanji → grammar from Lessons 1..N-1 only) and (2) makes a natural sentence.
+  //  Easy mode: only grammar for which a hand-written natural example sentence exists (examples*.js)
+  //  Difficult mode: any grammar that fits the word type (a sample answer is added when one exists)
+  const p5mode=window._wsP5Mode||'easy';
+  const hasEX=typeof EX!=='undefined'&&EX&&typeof EX.make==='function';
   const usedGram=new Set();
   const p5items=[];
   if(p5on){
@@ -1285,19 +1301,33 @@ function generateWorksheet(name,weak){
       const maxL=lesson-1;
       const minL=gramScope==='recent'?Math.max(1,maxL-1):1;
       const type=wordType(w.word,w.reading,getMeaning(w.word,w.reading));
-      const fits=GENKI_GRAMMAR.filter(g=>g.l>=minL&&g.l<=maxL&&grammarFitsType(g,type));
+      const okLabels=hasEX?EX.labelsFor(w.word):[];
+      let fits=GENKI_GRAMMAR.filter(g=>g.l>=minL&&g.l<=maxL);
+      if(p5mode==='easy')fits=fits.filter(g=>okLabels.includes(g.en));
+      else fits=fits.filter(g=>grammarFitsType(g,type)||okLabels.includes(g.en));
       // Prefer the grammar the teacher checked; if none of it fits this word, use any grammar that fits
       let cands=fits.filter(g=>gramSel.has(g.p));
       if(cands.length===0)cands=fits;
-      if(cands.length===0)continue; // no natural grammar for this word → skip it
-      const poolAll=cands.map(x=>x.en); // every grammar this word can take (used by the 🔄 re-roll button)
+      if(cands.length===0)continue; // no natural grammar / example for this word → skip it
+      const poolAll=cands;
       const fresh=cands.filter(g=>!usedGram.has(g.p));
       if(fresh.length>0)cands=fresh;
       const g=cands[Math.floor(Math.random()*cands.length)];
       usedGram.add(g.p);
-      p5items.push({w,g,lesson,type,pool:poolAll});
+      // one example per candidate grammar (used by the chosen question and by the 🔄 re-roll button)
+      const alts=[{g:g.en,ex:hasEX?EX.make(w.word,g.en):null}];
+      if(p5mode==='easy'&&!alts[0].ex)continue;
+      for(const x of shuf(poolAll)){
+        if(alts.length>=8)break;
+        if(x.en===g.en||alts.some(a=>a.g===x.en))continue;
+        const ex=hasEX?EX.make(w.word,x.en):null;
+        if(p5mode==='easy'&&!ex)continue;
+        alts.push({g:x.en,ex});
+      }
+      p5items.push({w,g,ex:alts[0].ex,alts});
     }
   }
+  const partOrder=[]; // which part (1–5) each printed part number is, for the answer key
 
   let partNum=0;
 
@@ -1335,12 +1365,26 @@ function generateWorksheet(name,weak){
     .reroll{margin-left:8px;border:1.5px solid #FF6B35;background:#fff;color:#FF6B35;border-radius:6px;padding:1px 8px;font-size:13px;font-weight:700;cursor:pointer;vertical-align:middle;}
     .reroll:hover{background:#FF6B35;color:#fff;}
     .reroll[disabled]{opacity:.35;cursor:not-allowed;}
-    @media print{body{padding:20px 28px;}.no-print{display:none!important;}}
+    .en5{font-size:15px;font-weight:700;margin-bottom:6px;color:#1a1a1a;}
+    .use{font-size:12px;color:#777;margin-bottom:4px;}
+    .use b{font-size:15px;color:#1a1a1a;font-weight:700;}
+    .pill5{display:inline-block;background:#fff;border:1.5px solid #FF6B35;color:#FF6B35;border-radius:6px;padding:1px 10px;font-weight:700;font-size:13px;}
+    .ans-wrap{margin-top:44px;padding-top:26px;border-top:3px dashed #ccc;}
+    .ans-ja{font-family:'Noto Serif JP',serif;font-size:15px;}
+    .ans-en{font-size:12px;color:#888;margin-top:2px;}
+    .vary{color:#999;font-size:11px;}
+    .gl{display:inline-block;border:1.5px solid #FF6B35;color:#FF6B35;border-radius:6px;padding:0 8px;font-size:11px;font-weight:700;margin-left:8px;}
+    .notice{margin:0 0 14px;padding:8px 12px;background:#fff7e0;border-radius:8px;font-size:12px;color:#8a6d00;}
+    @media print{body{padding:20px 28px;}.no-print{display:none!important;}
+      #apage{page-break-before:always;margin-top:0;padding-top:0;border-top:none;}
+      body.pm-q #apage{display:none;} body.pm-a #qpage{display:none;} body.pm-a #apage{page-break-before:auto;}}
   </style></head><body>
-  <div class="no-print" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:-12px 0 18px;padding:10px 14px;background:#FFF0EB;border-radius:12px;">
-    <button onclick="window.print()" style="padding:9px 18px;border-radius:10px;border:none;background:#FF6B35;color:#fff;font-weight:800;font-size:14px;cursor:pointer;">🖨 Print / Save as PDF</button>
-    <span style="font-size:12px;color:#888;">This bar and the 🔄 buttons are shown on screen only — they are not printed.</span>
-  </div>`;
+  <div class="no-print" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-12px 0 18px;padding:10px 14px;background:#FFF0EB;border-radius:12px;">
+    <button onclick="pr('q')" style="padding:9px 16px;border-radius:10px;border:none;background:#FF6B35;color:#fff;font-weight:800;font-size:13px;cursor:pointer;">🖨 Print worksheet</button>
+    <button onclick="pr('a')" style="padding:9px 16px;border-radius:10px;border:2px solid #FF6B35;background:#fff;color:#FF6B35;font-weight:800;font-size:13px;cursor:pointer;">🖨 Print answer key</button>
+    <button onclick="pr('b')" style="padding:9px 16px;border-radius:10px;border:2px solid #ddd;background:#fff;color:#555;font-weight:800;font-size:13px;cursor:pointer;">🖨 Both</button>
+    <span style="font-size:12px;color:#888;">Choose “Save as PDF” in the print window to make a PDF. This bar and the 🔄 buttons are not printed. The answer key is at the bottom of this page.</span>
+  </div><div id="qpage">`;
 
   out+=`<div class="header">
     <div class="title">Kanji Practice 1 — <span>${name}</span></div>
@@ -1351,9 +1395,13 @@ function generateWorksheet(name,weak){
     <div class="nameline-item">Score <span class="nameline-blank" style="width:80px;"></span></div>
   </div>`;
 
+  if(p5on&&p5items.length<p5n){
+    out+=`<div class="notice no-print">Part 5 (${p5mode==='easy'?'Easy':'Difficult'}): ${p5items.length} of the ${p5n} questions you asked for could be made — the other words have no natural sentence for the grammar you selected yet.${p5mode==='easy'?' Try Difficult mode, or choose more grammar / “All learned”.':''}</div>`;
+  }
+
   // ── Part 1: Matching ──
   if(p1on&&p1words.length>0){
-    partNum++;
+    partNum++;partOrder.push(1);
     // Shuffle ensuring no word stays in same position
     let rights;
     let attempts=0;
@@ -1381,7 +1429,7 @@ function generateWorksheet(name,weak){
 
   // ── Part 2: Write kanji from reading ──
   if(p2on&&p2words.length>0){
-    partNum++;
+    partNum++;partOrder.push(2);
     out+=`<div class="part">
       <div class="part-label"><span class="part-pill">Part ${partNum}</span></div>
       <div class="part-box">
@@ -1402,7 +1450,7 @@ function generateWorksheet(name,weak){
 
   // ── Part 3: English → kanji + reading ──
   if(p3on&&p3words.length>0){
-    partNum++;
+    partNum++;partOrder.push(3);
     out+=`<div class="part">
       <div class="part-label"><span class="part-pill">Part ${partNum}</span></div>
       <div class="part-box">
@@ -1421,7 +1469,7 @@ function generateWorksheet(name,weak){
 
   // ── Part 4: Make a sentence ──
   if(p4on&&p4words.length>0){
-    partNum++;
+    partNum++;partOrder.push(4);
     out+=`<div class="part">
       <div class="part-label"><span class="part-pill">Part ${partNum}</span></div>
       <div class="part-box">
@@ -1444,42 +1492,76 @@ function generateWorksheet(name,weak){
 
   // ── Part 5: Kanji + Grammar sentence ──
   if(p5on&&p5items.length>0){
-    partNum++;
+    partNum++;partOrder.push(5);
+    const easy=p5mode==='easy';
     out+=`<div class="part">
       <div class="part-label"><span class="part-pill">Part ${partNum}</span></div>
       <div class="part-box">
-        <div class="inst">Make a sentence using BOTH the kanji word and the grammar. Write the kanji word in kanji.</div>
-        <div class="no-print" style="font-size:11px;color:#aaa;margin:-6px 0 8px;">🔄 = pick a different grammar for that question (shown on screen only, not printed)</div>
+        <div class="inst">${easy?'Translate the sentence into Japanese. Use the kanji word and the grammar shown. Write the word in kanji.':'Make a sentence using BOTH the kanji word and the grammar. Write the kanji word in kanji.'}</div>
+        <div class="no-print" style="font-size:11px;color:#aaa;margin:-6px 0 8px;">🔄 = pick a different grammar / sentence for that question (shown on screen only, not printed)</div>
         <table>`;
     p5items.forEach((it,i)=>{
       const w=it.w,g=it.g;
       const meaning=getMeaning(w.word,w.reading);
-      out+=`<tr class="sent-row">
+      const rr=`<button class="no-print reroll" id="rr${i}" onclick="reroll(${i})" title="Pick a different grammar">🔄</button>`;
+      if(easy){
+        out+=`<tr class="sent-row">
         <td class="num" style="vertical-align:top;padding-top:14px;">${i+1}.</td>
         <td>
-          <div style="margin-bottom:4px;"><span class="kanji">${w.word}</span> <span style="font-size:12px;color:#888;">(${w.reading})</span>${meaning?` <span style="font-size:11px;color:#aaa;">— ${meaning}</span>`:''}</div>
-          <div style="margin-bottom:2px;"><span style="display:inline-block;background:#fff;border:1.5px solid #FF6B35;color:#FF6B35;border-radius:6px;padding:1px 10px;font-weight:700;font-size:13px;" id="g5_${i}">${g.en}</span><button class="no-print reroll" id="rr${i}" onclick="reroll(${i})" title="Pick a different grammar">🔄</button></div>
+          <div class="en5" id="en5_${i}">${it.ex.en}</div>
+          <div class="use">Use: <b>${w.reading}</b>${meaning?` <span style="color:#aaa;">(${meaning})</span>`:''} &nbsp; <span class="pill5" id="g5_${i}">${g.en}</span>${rr}</div>
           <span class="sent-line"></span>
         </td>
       </tr>`;
+      }else{
+        out+=`<tr class="sent-row">
+        <td class="num" style="vertical-align:top;padding-top:14px;">${i+1}.</td>
+        <td>
+          <div style="margin-bottom:4px;"><span class="kanji">${w.word}</span> <span style="font-size:12px;color:#888;">(${w.reading})</span>${meaning?` <span style="font-size:11px;color:#aaa;">— ${meaning}</span>`:''}</div>
+          <div style="margin-bottom:2px;"><span class="pill5" id="g5_${i}">${g.en}</span>${rr}</div>
+          <span class="sent-line"></span>
+        </td>
+      </tr>`;
+      }
     });
     out+=`</table></div></div>`;
   }
+  out+=`</div>`; // end #qpage
+
+  // ── Answer key ──
+  out+=`<div id="apage" class="ans-wrap"><div class="header"><div class="title">Answer Key — <span>${name}</span></div></div>`;
+  partOrder.forEach((pid,idx)=>{
+    let rows='';
+    if(pid===1)p1words.forEach((w,i)=>{rows+=`<tr><td class="num">${i+1}.</td><td><span class="kanji">${w.word}</span> → ${w.reading}</td></tr>`;});
+    if(pid===2)p2words.forEach((w,i)=>{rows+=`<tr><td class="num">${i+1}.</td><td>${w.reading} → <span class="kanji">${w.word}</span></td></tr>`;});
+    if(pid===3)p3words.forEach((w,i)=>{const m=getMeaning(w.word,w.reading);rows+=`<tr><td class="num">${i+1}.</td><td>${m||w.word} → <span class="kanji">${w.word}</span> （${w.reading}）</td></tr>`;});
+    if(pid===4)p4words.forEach((w,i)=>{rows+=`<tr><td class="num">${i+1}.</td><td><span class="kanji">${w.word}</span> （${w.reading}） <span class="vary">— answers vary: any correct sentence that uses this word</span></td></tr>`;});
+    if(pid===5)p5items.forEach((it,i)=>{
+      rows+=`<tr><td class="num" style="vertical-align:top;">${i+1}.</td><td><span class="ans-ja" id="a5ja_${i}"></span><span class="gl" id="a5g_${i}"></span><div class="ans-en" id="a5note_${i}"></div></td></tr>`;
+    });
+    out+=`<div class="part"><div class="part-label"><span class="part-pill">Part ${idx+1}</span></div><div class="part-box"><table>${rows}</table></div></div>`;
+  });
+  out+=`</div>`;
 
   if(p5on&&p5items.length>0){
-    const p5data=JSON.stringify(p5items.map(it=>({cur:it.g.en,pool:it.pool}))).replace(/</g,'\\u003c');
-    out+='<script>var P5='+p5data+';'
-      +'function reroll(i){var it=P5[i];var used={};P5.forEach(function(x,j){if(j!==i)used[x.cur]=1;});'
-      +'var c=it.pool.filter(function(e){return e!==it.cur&&!used[e];});'
-      +'if(!c.length)c=it.pool.filter(function(e){return e!==it.cur;});'
-      +'if(!c.length)return;it.cur=c[Math.floor(Math.random()*c.length)];'
-      +'document.getElementById("g5_"+i).textContent=it.cur;}'
-      +'P5.forEach(function(it,i){if(it.pool.length<=1){var b=document.getElementById("rr"+i);if(b){b.disabled=true;b.title="No other grammar fits this word";}}});'
+    const p5data=JSON.stringify(p5items.map(it=>({cur:0,alts:it.alts.map(a=>({g:a.g,ja:a.ex?a.ex.ja:'',en:a.ex?a.ex.en:''}))}))).replace(/</g,'\\u003c');
+    out+='<script>var P5='+p5data+';var EASY='+(p5mode==='easy'?'true':'false')+';'
+      +'function paint(i){var it=P5[i],a=it.alts[it.cur];'
+      +'document.getElementById("g5_"+i).textContent=a.g;'
+      +'var e=document.getElementById("en5_"+i);if(e)e.textContent=a.en;'
+      +'document.getElementById("a5g_"+i).textContent=a.g;'
+      +'var j=document.getElementById("a5ja_"+i),n=document.getElementById("a5note_"+i);'
+      +'if(a.ja){j.textContent=a.ja;n.textContent=EASY?"":"Sample answer — other correct sentences are fine too.";if(EASY){n.textContent=a.en;}}'
+      +'else{j.textContent="";n.textContent="Answers vary — check that the sentence uses the kanji word and the grammar.";}}'
+      +'function reroll(i){var it=P5[i];var used={};P5.forEach(function(x,j){if(j!==i)used[x.alts[x.cur].g]=1;});'
+      +'var idx=[];it.alts.forEach(function(a,k){if(k!==it.cur&&!used[a.g])idx.push(k);});'
+      +'if(!idx.length)it.alts.forEach(function(a,k){if(k!==it.cur)idx.push(k);});'
+      +'if(!idx.length)return;it.cur=idx[Math.floor(Math.random()*idx.length)];paint(i);}'
+      +'P5.forEach(function(it,i){paint(i);if(it.alts.length<=1){var b=document.getElementById("rr"+i);if(b){b.disabled=true;b.title="No other grammar fits this word";}}});'
       +'<\/script>';
   }
-  if(!(p5on&&p5items.length>0)){
-    out+=`<script>window.onload=()=>setTimeout(()=>window.print(),400);<\/script>`;
-  }
+  out+='<script>function pr(m){document.body.className=m==="b"?"":"pm-"+m;setTimeout(function(){window.print();document.body.className="";},60);}'
+    +'window.onafterprint=function(){document.body.className="";};<\/script>';
   out+=`</body></html>`;
 
   const w=window.open('','_blank');
