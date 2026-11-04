@@ -1124,69 +1124,100 @@ function showWorksheetDialog(name,weak){
 // ── Genki I grammar by lesson (for Part 5: Kanji + Grammar sentence) ──
 // Source: 初級日本語げんき［第3版］ 文法説明（第1〜11課）。kanji Unit N uses grammar L1..L(N-1) only.
 const GENKI_GRAMMAR=[
-  {l:1,p:'〜は〜です',en:'X is Y'},
-  {l:1,p:'〜ですか',en:'question with か'},
-  {l:1,p:'名詞1の名詞2',en:'Noun1 の Noun2'},
-  {l:2,p:'これ／それ／あれ',en:'this / that / that over there'},
-  {l:2,p:'この／その／あの＋名詞',en:'this / that + noun'},
-  {l:2,p:'ここ／そこ／あそこ',en:'here / there'},
-  {l:2,p:'だれの＋名詞',en:'whose ~?'},
-  {l:2,p:'〜も',en:'also / too'},
-  {l:2,p:'〜じゃないです',en:'is not (noun)'},
-  {l:2,p:'〜ね／〜よ',en:'right? / you know'},
-  {l:3,p:'〜ます／〜ません',en:'verb present (polite)'},
-  {l:3,p:'を・で・に・へ',en:'particles: object / place / time & goal'},
-  {l:3,p:'時間＋に',en:'at (time)'},
-  {l:3,p:'〜ませんか',en:'won\'t you ~? (invitation)'},
-  {l:3,p:'よく／ときどき／あまり／ぜんぜん',en:'frequency adverbs'},
-  {l:4,p:'〜があります／います',en:'there is / exists'},
-  {l:4,p:'〜の前／後ろ／中／上／下／となり',en:'position words'},
-  {l:4,p:'〜でした／〜じゃなかったです',en:'past of です'},
-  {l:4,p:'〜ました／〜ませんでした',en:'verb past (polite)'},
-  {l:4,p:'〜時間（一時間など）',en:'duration'},
-  {l:4,p:'たくさん',en:'a lot'},
-  {l:4,p:'〜と（一緒に）',en:'and / with'},
-  {l:5,p:'イ形容詞（現在）',en:'i-adjective present'},
-  {l:5,p:'ナ形容詞（現在）',en:'na-adjective present'},
-  {l:5,p:'形容詞（過去）',en:'adjective past'},
-  {l:5,p:'形容詞＋名詞',en:'adjective + noun'},
-  {l:5,p:'〜が好きです／きらいです',en:'like / dislike'},
-  {l:5,p:'〜ましょう／〜ましょうか',en:'let\'s ~'},
-  {l:5,p:'数え方（〜枚など）',en:'counters'},
-  {l:6,p:'〜てください',en:'please do ~'},
-  {l:6,p:'〜て、〜（2つの動作）',en:'do A and (then) B'},
-  {l:6,p:'〜てもいいですか',en:'may I ~?'},
-  {l:6,p:'〜てはいけません',en:'must not ~'},
-  {l:6,p:'〜から（理由）',en:'because ~'},
-  {l:6,p:'〜ましょうか（手伝い）',en:'shall I ~? (offer)'},
-  {l:7,p:'〜ています（進行中）',en:'is ~ing'},
-  {l:7,p:'〜ています（状態）',en:'state / result of change'},
-  {l:7,p:'〜は〜が〜です（体・特徴）',en:'X has (feature)'},
-  {l:7,p:'形容詞のテ形（〜くて／〜で）',en:'adjective te-form'},
-  {l:7,p:'〜に行く／来る／帰る',en:'go to do ~'},
-  {l:7,p:'〜人（人数）',en:'counting people'},
-  {l:8,p:'短形（普通形）',en:'short forms'},
-  {l:8,p:'〜と思います',en:'I think that ~'},
-  {l:8,p:'〜と言っていました',en:'~ said that ~'},
-  {l:8,p:'〜ないでください',en:'please don\'t ~'},
-  {l:8,p:'〜のが好きです／上手です',en:'like / good at doing ~'},
-  {l:8,p:'何か／何も',en:'something / nothing'},
-  {l:9,p:'過去の短形',en:'short past forms'},
-  {l:9,p:'動詞・形容詞で名詞を修飾',en:'noun modification'},
-  {l:9,p:'もう〜ました／まだ〜ていません',en:'already / not yet'},
-  {l:9,p:'〜から、〜（説明が先）',en:'~, so ~'},
-  {l:10,p:'AのほうがBより〜',en:'A is more ~ than B'},
-  {l:10,p:'〜がいちばん〜',en:'the most ~'},
-  {l:10,p:'形容詞／名詞＋の',en:'the ~ one'},
-  {l:10,p:'〜つもりだ',en:'plan to ~'},
-  {l:10,p:'〜くなる／〜になる',en:'become ~'},
-  {l:10,p:'どこかに／どこにも',en:'somewhere / nowhere'},
-  {l:10,p:'で（手段・道具）',en:'by / with (means)'},
-  {l:11,p:'〜たいです',en:'want to ~'},
-  {l:11,p:'〜たり〜たりする',en:'do things like ~ and ~'},
-  {l:11,p:'〜ことがある',en:'have done ~ before'},
-  {l:11,p:'AやB',en:'A and B (examples)'}
+  {l:1,p:'〜は〜です',en:'X is Y',t:'N PL TH P TC C DU'},
+  {l:1,p:'〜ですか',en:'Yes/no question with か',t:'N PL TH P TC C DU Q'},
+  {l:1,p:'名詞1の名詞2',en:'Noun A の Noun B',t:'N PL TH P TC C DU'},
+  {l:2,p:'これ／それ／あれ',en:'this / that / that over there (a thing)',t:'N PL TH'},
+  {l:2,p:'この／その／あの＋名詞',en:'this / that + noun',t:'N PL TH P BD'},
+  {l:2,p:'ここ／そこ／あそこ',en:'here / there',t:'PL'},
+  {l:2,p:'だれの＋名詞',en:'Whose ~?',t:'TH'},
+  {l:2,p:'〜も',en:'~ too / also (も)',t:'N PL TH P TC C DU'},
+  {l:2,p:'〜じゃないです',en:'is not (noun)',t:'N PL TH P TC C DU'},
+  {l:2,p:'〜ね／〜よ',en:'Sentence ending ね / よ',t:'N PL TH P TC C DU'},
+  {l:3,p:'〜ます／〜ません',en:'Polite present verb',t:'V N PL TH P TM TC'},
+  {l:3,p:'を・で・に・へ',en:'Particles を / で / に / へ',t:'N PL TH P'},
+  {l:3,p:'時間＋に',en:'At (a time) with に',t:'TC'},
+  {l:3,p:'〜ませんか',en:'Invitation: won\'t you ~?',t:'V N PL TH TM TC'},
+  {l:3,p:'よく／ときどき／あまり／ぜんぜん',en:'Frequency adverbs (often, sometimes, not much, never)',t:'V N PL TH'},
+  {l:4,p:'〜があります／います',en:'There is / exists (あります・います)',t:'N PL TH P'},
+  {l:4,p:'〜の前／後ろ／中／上／下／となり',en:'Position words (front, behind, inside, on, under, next to)',t:'PL TH'},
+  {l:4,p:'〜でした／〜じゃなかったです',en:'Past of です (was / wasn\'t)',t:'N PL TH P TC C DU'},
+  {l:4,p:'〜ました／〜ませんでした',en:'Polite past verb',t:'V N PL TH P TM TC'},
+  {l:4,p:'〜時間（一時間など）',en:'Duration (for ~ hours / minutes)',t:'V DU'},
+  {l:4,p:'たくさん',en:'たくさん (a lot of)',t:'PL TH P'},
+  {l:4,p:'〜と（一緒に）',en:'と (and / with)',t:'N PL TH P'},
+  {l:5,p:'イ形容詞（現在）',en:'i-adjective, present',t:'I'},
+  {l:5,p:'ナ形容詞（現在）',en:'na-adjective, present',t:'NA'},
+  {l:5,p:'形容詞（過去）',en:'Adjective, past',t:'I NA'},
+  {l:5,p:'形容詞＋名詞',en:'Adjective + noun',t:'I NA N PL TH P'},
+  {l:5,p:'〜が好きです／きらいです',en:'Like / dislike (好き・きらい)',t:'N PL TH P'},
+  {l:5,p:'〜ましょう／〜ましょうか',en:'Let\'s ~ / Shall we ~?',t:'V N PL TH TM'},
+  {l:5,p:'数え方（〜枚など）',en:'Counters (~ sheets, etc.)',t:'C TH'},
+  {l:6,p:'〜てください',en:'Please do ~ (te-form)',t:'V N PL TH'},
+  {l:6,p:'〜て、〜（2つの動作）',en:'Do A and then B (te-form)',t:'V N PL TH'},
+  {l:6,p:'〜てもいいですか',en:'May I ~? / You may ~',t:'V N PL TH'},
+  {l:6,p:'〜てはいけません',en:'You must not ~',t:'V N PL TH'},
+  {l:6,p:'〜から（理由）',en:'Because ~ (から)',t:'V I NA N PL TH P TC TM'},
+  {l:6,p:'〜ましょうか（手伝い）',en:'Shall I ~? (offering help)',t:'V N PL TH'},
+  {l:7,p:'〜ています（進行中）',en:'Is doing ~ (ている)',t:'V N PL TH'},
+  {l:7,p:'〜ています（状態）',en:'State / result (ている)',t:'V N PL TH P'},
+  {l:7,p:'〜は〜が〜です（体・特徴）',en:'Describing features (X は Y が ~)',t:'BD P I'},
+  {l:7,p:'形容詞のテ形（〜くて／〜で）',en:'Adjective te-form (and)',t:'I NA'},
+  {l:7,p:'〜に行く／来る／帰る',en:'Go / come to do ~',t:'V N PL TH'},
+  {l:7,p:'〜人（人数）',en:'Counting people',t:'P C'},
+  {l:8,p:'短形（普通形）',en:'Short (plain) forms',t:'V I NA N PL TH P TC TM Q'},
+  {l:8,p:'〜と思います',en:'I think that ~',t:'V I NA N PL TH P TC TM Q'},
+  {l:8,p:'〜と言っていました',en:'~ said that ~',t:'V I NA N PL TH P TC TM Q'},
+  {l:8,p:'〜ないでください',en:'Please don\'t ~',t:'V N PL TH'},
+  {l:8,p:'〜のが好きです／上手です',en:'Like / good at doing ~',t:'V N PL TH'},
+  {l:8,p:'何か／何も',en:'Something / nothing',t:'V N PL TH TM Q'},
+  {l:9,p:'過去の短形',en:'Short past forms',t:'V I NA N PL TH P TC TM C DU BD'},
+  {l:9,p:'動詞・形容詞で名詞を修飾',en:'Modifying a noun with a verb / adjective',t:'V I NA N PL TH P'},
+  {l:9,p:'もう〜ました／まだ〜ていません',en:'Already / not yet',t:'V N PL TH'},
+  {l:9,p:'〜から、〜（説明が先）',en:'~, so ~ (explanation first)',t:'V I NA N PL TH P TC TM'},
+  {l:10,p:'AのほうがBより〜',en:'A is more ~ than B',t:'I NA N PL TH P'},
+  {l:10,p:'〜がいちばん〜',en:'The most ~',t:'I NA N PL TH P'},
+  {l:10,p:'形容詞／名詞＋の',en:'The ~ one (の)',t:'I NA TH'},
+  {l:10,p:'〜つもりだ',en:'Plan to ~',t:'V N PL TH'},
+  {l:10,p:'〜くなる／〜になる',en:'Become ~',t:'I NA N P PL'},
+  {l:10,p:'どこかに／どこにも',en:'Somewhere / nowhere',t:'V PL'},
+  {l:10,p:'で（手段・道具）',en:'By / with (means: で)',t:'TH N'},
+  {l:11,p:'〜たいです',en:'Want to ~',t:'V N PL TH'},
+  {l:11,p:'〜たり〜たりする',en:'Do things like ~ and ~',t:'V N PL TH'},
+  {l:11,p:'〜ことがある',en:'Have done ~ before',t:'V N PL TH'},
+  {l:11,p:'AやB',en:'A and B, etc. (や)',t:'N PL TH P'}
 ];
+
+// ── Word type guess (for Part 5): decides which grammar can naturally go with a kanji word ──
+// V verb · I i-adj · NA na-adj · C number/counter · DU duration · TC clock/calendar time (takes に)
+// TM adverbial time (今日, 毎日…) · P person · PL place · TH concrete thing · BD body part · N other noun
+const WT_I_ADJ=new Set(['円い','大きい','小さい','高い','新しい','白い','少ない','古い','正しい','長い','明るい','強い','早い','赤い','青い']);
+const WT_VERB=new Set(['聞こえる','来ない','来ます','下さい','有る']);
+function wordType(k,r,e){
+  e=String(e||'').toLowerCase();
+  if(/な$/.test(k))return 'NA';
+  if(WT_I_ADJ.has(k))return 'I';
+  if(WT_VERB.has(k)||/^to /.test(e))return 'V';
+  if(/^(one|two|three|four|five|six|seven|eight|nine|ten|half an?|\d+) (days?|hours?|weeks?|months?|minutes?|years?)$|^half a year$|^all year around$|^time; hours$/.test(e))return 'DU';
+  if(/o'clock|^half past|^(january|february|march|april|may|june|july|august|september|october|november|december)$|^(sunday|monday|tuesday|wednesday|thursday|friday|saturday)$|^a\.m\.|^p\.m\.|^noon$|^in the morning|^mother's day|^new year/.test(e))return 'TC';
+  if(/^(today|now|tonight|tomorrow|sometimes|recently|later|lastly|this (week|month|year|morning)|last (week|month)|next (week|year|time)|every |in one's childhood|once upon|near future)/.test(e))return 'TM';
+  if(/^(what|what time|something)$/.test(e))return 'Q';
+  if(/^(little|a little|ahead|not in particular|separately|alone|once)$/.test(e))return 'ADV';
+  if(/^(one|two|three|four|five|six|seven|eight|nine|ten|hundred|thousand|million|how many|\d+)\b/.test(e)||/\((things|native)\)$| years old$/.test(e))return 'C';
+  if(/^(hand|mouth|right hand|left hand|eye|ear|foot|leg|head|hair|nose|face|arm)$/.test(e))return 'BD';
+  if(!/tongue|friendship|working/.test(e)&&(e==='i'||/\b(students?|teacher|person|people|woman|man|girl|boy|child|friend|clerk|member|attendant|mother|father|grandfather|grandmother|daughter|son|singer|mayor|president|ambassador|painter|author|adult|foreigner|baby|youth|senior|acquaintance|office worker|human|wife|genius|emperor|god)\b/.test(e)||/^mr\./.test(e)||e==='kyoko'))return 'P';
+  if(/^(entry|going|returning|visit)/.test(e))return 'N';
+  if(!/^the (east|west)/.test(e)&&/\b(school|university|bank|library|hospital|cafeteria|church|shrine|company|embassy|country|house|home|city|town|market|kitchen|inn|theater|parlor|station|rooftop|entrance|exit|mountain|mt\.|river|land|field|japan|china|korea|tokyo|kyoto|hokkaido|kobe|kanto|kansai|tohoku|asia|antarctica|pole|mars|overseas|east|west|north|south|diet|stall|places|neighborhood|heaven|lot|volcano)\b/.test(e))return 'PL';
+  if(/\b(book|water|fire|tree|money|car|bicycle|train|dictionary|textbook|newspaper|letter|paper|watch|clock|battery|microwave|wheelchair|vending|bathing suit|comic|passport|bullet|cow|milk|beef|food|drink|meal|breakfast|diary|name card|origami|snow|rain|soil|clay|swan|moon|fireworks|telephone|electricity|cover page|sheet|automobile|subway)\b/.test(e))return 'TH';
+  return 'N';
+}
+
+// Does this grammar point make a natural sentence with a word of this type?
+function grammarFitsType(g,type){
+  const ts=g.t.split(' ');
+  if(type==='ADV')return ts.includes('V')&&g.p.indexOf('〜時間')!==0; // adverbs modify a verb sentence
+  return ts.includes(type);
+}
 
 function getLessonForWord(word,reading){
   for(const l of Object.keys(FLASH)){
@@ -1242,25 +1273,30 @@ function generateWorksheet(name,weak){
   const p2words=p2on?pick(p2n):[];
   const p3words=p3on?pick(p3n):[];
   const p4words=p4on?pick(p4n):[];
-  const p5words=p5on?pick(p5n):[];
-
-  // Part 5: pair each kanji word with a grammar point the student has already learned.
-  // Kanji from Lesson N → grammar from Lessons 1..N-1 only (never Lesson N's own grammar).
+  // Part 5: pair each kanji word with a grammar point that (1) the student has already learned
+  // (Lesson N kanji → grammar from Lessons 1..N-1 only) and (2) fits the word's type, so the
+  // combination makes a natural sentence (e.g. a noun never gets "na-adjective, present").
   const usedGram=new Set();
-  const p5items=p5words.map(w=>{
-    const lesson=getLessonForWord(w.word,w.reading)||12;
-    const maxL=lesson-1;
-    const minL=gramScope==='recent'?Math.max(1,maxL-1):1;
-    const inRange=GENKI_GRAMMAR.filter(g=>g.l>=minL&&g.l<=maxL);
-    // Only grammar the teacher checked; if none of the checked ones fit this kanji's lesson range, fall back to the range itself
-    let cands=inRange.filter(g=>gramSel.has(g.p));
-    if(cands.length===0)cands=inRange;
-    const fresh=cands.filter(g=>!usedGram.has(g.p));
-    if(fresh.length>0)cands=fresh;
-    const g=cands[Math.floor(Math.random()*cands.length)];
-    usedGram.add(g.p);
-    return {w,g,lesson};
-  });
+  const p5items=[];
+  if(p5on){
+    for(const w of shuf(weak)){
+      if(p5items.length>=p5n)break;
+      const lesson=getLessonForWord(w.word,w.reading)||12;
+      const maxL=lesson-1;
+      const minL=gramScope==='recent'?Math.max(1,maxL-1):1;
+      const type=wordType(w.word,w.reading,getMeaning(w.word,w.reading));
+      const fits=GENKI_GRAMMAR.filter(g=>g.l>=minL&&g.l<=maxL&&grammarFitsType(g,type));
+      // Prefer the grammar the teacher checked; if none of it fits this word, use any grammar that fits
+      let cands=fits.filter(g=>gramSel.has(g.p));
+      if(cands.length===0)cands=fits;
+      if(cands.length===0)continue; // no natural grammar for this word → skip it
+      const fresh=cands.filter(g=>!usedGram.has(g.p));
+      if(fresh.length>0)cands=fresh;
+      const g=cands[Math.floor(Math.random()*cands.length)];
+      usedGram.add(g.p);
+      p5items.push({w,g,lesson,type});
+    }
+  }
 
   let partNum=0;
 
@@ -1413,7 +1449,7 @@ function generateWorksheet(name,weak){
         <td class="num" style="vertical-align:top;padding-top:14px;">${i+1}.</td>
         <td>
           <div style="margin-bottom:4px;"><span class="kanji">${w.word}</span> <span style="font-size:12px;color:#888;">(${w.reading})</span>${meaning?` <span style="font-size:11px;color:#aaa;">— ${meaning}</span>`:''}</div>
-          <div style="margin-bottom:2px;"><span style="display:inline-block;background:#fff;border:1.5px solid #FF6B35;color:#FF6B35;border-radius:6px;padding:1px 10px;font-weight:700;font-size:13px;">${g.p}</span> <span style="font-size:11px;color:#aaa;">${g.en}</span></div>
+          <div style="margin-bottom:2px;"><span style="display:inline-block;background:#fff;border:1.5px solid #FF6B35;color:#FF6B35;border-radius:6px;padding:1px 10px;font-weight:700;font-size:13px;">${g.en}</span></div>
           <span class="sent-line"></span>
         </td>
       </tr>`;
