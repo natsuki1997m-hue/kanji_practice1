@@ -790,7 +790,9 @@ function showWorksheetDialog(name,weak){
   let wsSelectedUnit=UNITS[0]||'3';
   let wsCustomUnit=UNITS[0]||'3';
   let wsCustomSelected=new Set(weak.map(w=>w.word+'|'+w.reading));
-  const parts={1:{on:true,n:6},2:{on:true,n:6},3:{on:true,n:6},4:{on:true,n:6}};
+  const parts={1:{on:true,n:6},2:{on:true,n:6},3:{on:true,n:6},4:{on:true,n:6},5:{on:false,n:5}};
+  let wsGramScope='all';
+  window._wsGramScope='all';
 
   function esc(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 
@@ -875,7 +877,7 @@ function showWorksheetDialog(name,weak){
     });
     const us=document.getElementById('wsUnitSel');
     if(us)us.textContent=unitSelCount(wsCustomUnit);
-    ['1','2','3','4'].forEach(n=>{
+    ['1','2','3','4','5'].forEach(n=>{
       const sl=document.getElementById('ws'+n+'n');
       if(sl){
         sl.max=maxQ;
@@ -896,7 +898,7 @@ function showWorksheetDialog(name,weak){
   }
 
   function syncParts(){
-    ['1','2','3','4'].forEach(n=>{
+    ['1','2','3','4','5'].forEach(n=>{
       const cb=document.getElementById('ws'+n+'on');
       const sl=document.getElementById('ws'+n+'n');
       if(cb)parts[n].on=cb.checked;
@@ -942,6 +944,15 @@ function showWorksheetDialog(name,weak){
         ${partRow(2,'Part 2 — Write kanji from reading')}
         ${partRow(3,'Part 3 — Kanji AND reading from English')}
         ${partRow(4,'Part 4 — Make a sentence')}
+        ${partRow(5,'Part 5 — Kanji + Grammar sentence')}
+      </div>
+      <div style="margin-top:8px;padding:10px 14px;background:#fff7f5;border-radius:12px;">
+        <div style="font-size:11px;font-weight:900;color:#888;margin-bottom:6px;letter-spacing:.06em;text-transform:uppercase;">Part 5 grammar range</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button onclick="wsSetGramScope('all')" style="padding:5px 12px;border-radius:99px;border:2px solid ${wsGramScope==='all'?'#FF6B35':'#ddd'};background:${wsGramScope==='all'?'#FF6B35':'#fff'};color:${wsGramScope==='all'?'#fff':'#666'};font-family:var(--ui);font-weight:800;font-size:12px;cursor:pointer;">All learned</button>
+          <button onclick="wsSetGramScope('recent')" style="padding:5px 12px;border-radius:99px;border:2px solid ${wsGramScope==='recent'?'#FF6B35':'#ddd'};background:${wsGramScope==='recent'?'#FF6B35':'#fff'};color:${wsGramScope==='recent'?'#fff':'#666'};font-family:var(--ui);font-weight:800;font-size:12px;cursor:pointer;">Last 2 lessons</button>
+        </div>
+        <div style="font-size:11px;color:#aaa;margin-top:6px;line-height:1.5;">Kanji from Lesson N uses grammar up to Lesson N−1 only. (e.g. L7 kanji → grammar up to L6, no L7 grammar)</div>
       </div>
 
       <div id="wsWarn" style="display:${total===0?'block':'none'};margin-top:12px;padding:10px;background:#fff7f5;border-radius:10px;color:#FF6B35;font-size:13px;font-weight:700;">⚠️ No words selected!</div>
@@ -955,6 +966,8 @@ function showWorksheetDialog(name,weak){
   }
 
   window.wsSetMode=m=>{syncParts();wsMode=m;renderDialog();};
+
+  window.wsSetGramScope=s=>{syncParts();wsGramScope=s;window._wsGramScope=s;renderDialog();};
 
   window.wsSetUnit=l=>{
     wsSelectedUnit=String(l);
@@ -1036,6 +1049,73 @@ function showWorksheetDialog(name,weak){
   overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
   renderDialog();
 }
+// ── Genki I grammar by lesson (for Part 5: Kanji + Grammar sentence) ──
+// Source: 初級日本語げんき［第3版］ 文法説明（第1〜11課）。kanji Unit N uses grammar L1..L(N-1) only.
+const GENKI_GRAMMAR=[
+  {l:1,p:'〜は〜です',en:'X is Y'},
+  {l:1,p:'〜ですか',en:'question with か'},
+  {l:1,p:'名詞1の名詞2',en:'Noun1 の Noun2'},
+  {l:2,p:'これ／それ／あれ',en:'this / that / that over there'},
+  {l:2,p:'この／その／あの＋名詞',en:'this / that + noun'},
+  {l:2,p:'ここ／そこ／あそこ',en:'here / there'},
+  {l:2,p:'だれの＋名詞',en:'whose ~?'},
+  {l:2,p:'〜も',en:'also / too'},
+  {l:2,p:'〜じゃないです',en:'is not (noun)'},
+  {l:2,p:'〜ね／〜よ',en:'right? / you know'},
+  {l:3,p:'〜ます／〜ません',en:'verb present (polite)'},
+  {l:3,p:'を・で・に・へ',en:'particles: object / place / time & goal'},
+  {l:3,p:'時間＋に',en:'at (time)'},
+  {l:3,p:'〜ませんか',en:'won\'t you ~? (invitation)'},
+  {l:3,p:'よく／ときどき／あまり／ぜんぜん',en:'frequency adverbs'},
+  {l:4,p:'〜があります／います',en:'there is / exists'},
+  {l:4,p:'〜の前／後ろ／中／上／下／となり',en:'position words'},
+  {l:4,p:'〜でした／〜じゃなかったです',en:'past of です'},
+  {l:4,p:'〜ました／〜ませんでした',en:'verb past (polite)'},
+  {l:4,p:'〜時間（一時間など）',en:'duration'},
+  {l:4,p:'たくさん',en:'a lot'},
+  {l:4,p:'〜と（一緒に）',en:'and / with'},
+  {l:5,p:'イ形容詞（現在）',en:'i-adjective present'},
+  {l:5,p:'ナ形容詞（現在）',en:'na-adjective present'},
+  {l:5,p:'形容詞（過去）',en:'adjective past'},
+  {l:5,p:'形容詞＋名詞',en:'adjective + noun'},
+  {l:5,p:'〜が好きです／きらいです',en:'like / dislike'},
+  {l:5,p:'〜ましょう／〜ましょうか',en:'let\'s ~'},
+  {l:5,p:'数え方（〜枚など）',en:'counters'},
+  {l:6,p:'〜てください',en:'please do ~'},
+  {l:6,p:'〜て、〜（2つの動作）',en:'do A and (then) B'},
+  {l:6,p:'〜てもいいですか',en:'may I ~?'},
+  {l:6,p:'〜てはいけません',en:'must not ~'},
+  {l:6,p:'〜から（理由）',en:'because ~'},
+  {l:6,p:'〜ましょうか（手伝い）',en:'shall I ~? (offer)'},
+  {l:7,p:'〜ています（進行中）',en:'is ~ing'},
+  {l:7,p:'〜ています（状態）',en:'state / result of change'},
+  {l:7,p:'〜は〜が〜です（体・特徴）',en:'X has (feature)'},
+  {l:7,p:'形容詞のテ形（〜くて／〜で）',en:'adjective te-form'},
+  {l:7,p:'〜に行く／来る／帰る',en:'go to do ~'},
+  {l:7,p:'〜人（人数）',en:'counting people'},
+  {l:8,p:'短形（普通形）',en:'short forms'},
+  {l:8,p:'〜と思います',en:'I think that ~'},
+  {l:8,p:'〜と言っていました',en:'~ said that ~'},
+  {l:8,p:'〜ないでください',en:'please don\'t ~'},
+  {l:8,p:'〜のが好きです／上手です',en:'like / good at doing ~'},
+  {l:8,p:'何か／何も',en:'something / nothing'},
+  {l:9,p:'過去の短形',en:'short past forms'},
+  {l:9,p:'動詞・形容詞で名詞を修飾',en:'noun modification'},
+  {l:9,p:'もう〜ました／まだ〜ていません',en:'already / not yet'},
+  {l:9,p:'〜から、〜（説明が先）',en:'~, so ~'},
+  {l:10,p:'AのほうがBより〜',en:'A is more ~ than B'},
+  {l:10,p:'〜がいちばん〜',en:'the most ~'},
+  {l:10,p:'形容詞／名詞＋の',en:'the ~ one'},
+  {l:10,p:'〜つもりだ',en:'plan to ~'},
+  {l:10,p:'〜くなる／〜になる',en:'become ~'},
+  {l:10,p:'どこかに／どこにも',en:'somewhere / nowhere'},
+  {l:10,p:'で（手段・道具）',en:'by / with (means)'},
+  {l:11,p:'〜たいです',en:'want to ~'},
+  {l:11,p:'〜たり〜たりする',en:'do things like ~ and ~'},
+  {l:11,p:'〜ことがある',en:'have done ~ before'},
+  {l:11,p:'AやB',en:'A and B (examples)'}
+];
+
 function getLessonForWord(word,reading){
   for(const l of Object.keys(FLASH)){
     for(const w of FLASH[l]){
@@ -1075,6 +1155,9 @@ function generateWorksheet(name,weak){
   const p2n=parseInt(document.getElementById('ws2n').value);
   const p3n=parseInt(document.getElementById('ws3n').value);
   const p4n=parseInt(document.getElementById('ws4n').value);
+  const p5on=document.getElementById('ws5on').checked;
+  const p5n=parseInt(document.getElementById('ws5n').value);
+  const gramScope=window._wsGramScope||'all';
 
   document.getElementById('wsDialog').remove();
 
@@ -1086,6 +1169,22 @@ function generateWorksheet(name,weak){
   const p2words=p2on?pick(p2n):[];
   const p3words=p3on?pick(p3n):[];
   const p4words=p4on?pick(p4n):[];
+  const p5words=p5on?pick(p5n):[];
+
+  // Part 5: pair each kanji word with a grammar point the student has already learned.
+  // Kanji from Lesson N → grammar from Lessons 1..N-1 only (never Lesson N's own grammar).
+  const usedGram=new Set();
+  const p5items=p5words.map(w=>{
+    const lesson=getLessonForWord(w.word,w.reading)||12;
+    const maxL=lesson-1;
+    const minL=gramScope==='recent'?Math.max(1,maxL-1):1;
+    let cands=GENKI_GRAMMAR.filter(g=>g.l>=minL&&g.l<=maxL);
+    const fresh=cands.filter(g=>!usedGram.has(g.p));
+    if(fresh.length>0)cands=fresh;
+    const g=cands[Math.floor(Math.random()*cands.length)];
+    usedGram.add(g.p);
+    return {w,g,lesson};
+  });
 
   let partNum=0;
 
@@ -1216,6 +1315,29 @@ function generateWorksheet(name,weak){
         <td class="num" style="vertical-align:top;padding-top:14px;">${i+1}.</td>
         <td>
           <div style="margin-bottom:6px;"><span class="kanji" >${w.word}</span> <span style="font-size:12px;color:#888;">(${w.reading})</span>${meaning?` <span style="font-size:11px;color:#aaa;">— ${meaning}</span>`:''}</div>
+          <span class="sent-line"></span>
+        </td>
+      </tr>`;
+    });
+    out+=`</table></div></div>`;
+  }
+
+  // ── Part 5: Kanji + Grammar sentence ──
+  if(p5on&&p5items.length>0){
+    partNum++;
+    out+=`<div class="part">
+      <div class="part-label"><span class="part-pill">Part ${partNum}</span></div>
+      <div class="part-box">
+        <div class="inst">Make a sentence using BOTH the kanji word and the grammar. Write the kanji word in kanji.</div>
+        <table>`;
+    p5items.forEach((it,i)=>{
+      const w=it.w,g=it.g;
+      const meaning=getMeaning(w.word,w.reading);
+      out+=`<tr class="sent-row">
+        <td class="num" style="vertical-align:top;padding-top:14px;">${i+1}.</td>
+        <td>
+          <div style="margin-bottom:4px;"><span class="kanji">${w.word}</span> <span style="font-size:12px;color:#888;">(${w.reading})</span>${meaning?` <span style="font-size:11px;color:#aaa;">— ${meaning}</span>`:''}</div>
+          <div style="margin-bottom:2px;"><span style="display:inline-block;background:#fff;border:1.5px solid #FF6B35;color:#FF6B35;border-radius:6px;padding:1px 10px;font-weight:700;font-size:13px;">${g.p}</span> <span style="font-size:11px;color:#aaa;">${g.en}</span></div>
           <span class="sent-line"></span>
         </td>
       </tr>`;
