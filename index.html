@@ -1301,7 +1301,7 @@ function generateWorksheet(name,weak){
 
   let partNum=0;
 
-  let out=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  let out=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Worksheet — ${name}</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=Noto+Serif+JP&display=swap" rel="stylesheet">
   <style>
     *{box-sizing:border-box;margin:0;padding:0;}
@@ -1336,7 +1336,11 @@ function generateWorksheet(name,weak){
     .reroll:hover{background:#FF6B35;color:#fff;}
     .reroll[disabled]{opacity:.35;cursor:not-allowed;}
     @media print{body{padding:20px 28px;}.no-print{display:none!important;}}
-  </style></head><body>`;
+  </style></head><body>
+  <div class="no-print" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:-12px 0 18px;padding:10px 14px;background:#FFF0EB;border-radius:12px;">
+    <button onclick="window.print()" style="padding:9px 18px;border-radius:10px;border:none;background:#FF6B35;color:#fff;font-weight:800;font-size:14px;cursor:pointer;">🖨 Print / Save as PDF</button>
+    <span style="font-size:12px;color:#888;">This bar and the 🔄 buttons are shown on screen only — they are not printed.</span>
+  </div>`;
 
   out+=`<div class="header">
     <div class="title">Kanji Practice 1 — <span>${name}</span></div>
@@ -1473,7 +1477,9 @@ function generateWorksheet(name,weak){
       +'P5.forEach(function(it,i){if(it.pool.length<=1){var b=document.getElementById("rr"+i);if(b){b.disabled=true;b.title="No other grammar fits this word";}}});'
       +'<\/script>';
   }
-  out+=`<script>window.onload=()=>setTimeout(()=>window.print(),400);<\/script>`;
+  if(!(p5on&&p5items.length>0)){
+    out+=`<script>window.onload=()=>setTimeout(()=>window.print(),400);<\/script>`;
+  }
   out+=`</body></html>`;
 
   const w=window.open('','_blank');
