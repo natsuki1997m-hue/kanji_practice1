@@ -793,6 +793,45 @@ function showWorksheetDialog(name,weak){
   const parts={1:{on:true,n:6},2:{on:true,n:6},3:{on:true,n:6},4:{on:true,n:6},5:{on:false,n:5}};
   let wsGramScope='all';
   window._wsGramScope='all';
+  let wsGramOpen=false;
+  const wsGramSel=new Set(GENKI_GRAMMAR.map(g=>g.p)); // grammar points allowed in Part 5 (default: all)
+  window._wsGramSel=wsGramSel;
+
+  // ---- Part 5 grammar picker (per-lesson groups, checkbox per grammar point) ----
+  function gramListHTML(){
+    let h='';
+    const lessons=[...new Set(GENKI_GRAMMAR.map(g=>g.l))];
+    lessons.forEach(l=>{
+      const col=HEX[l]||'#888';
+      h+=`<div style="display:flex;align-items:center;justify-content:space-between;margin:10px 0 2px;">
+        <span style="font-size:11px;font-weight:900;color:${col};">Lesson ${l}</span>
+        <span style="display:flex;gap:4px;">
+          <button onclick="wsGramLesson(${l},1)" style="font-size:10px;padding:2px 8px;border-radius:99px;border:2px solid #ddd;background:#fff;color:#666;font-family:var(--ui);font-weight:800;cursor:pointer;">All</button>
+          <button onclick="wsGramLesson(${l},0)" style="font-size:10px;padding:2px 8px;border-radius:99px;border:2px solid #ddd;background:#fff;color:#666;font-family:var(--ui);font-weight:800;cursor:pointer;">None</button>
+        </span></div>`;
+      GENKI_GRAMMAR.forEach((g,i)=>{
+        if(g.l!==l)return;
+        const on=wsGramSel.has(g.p);
+        h+=`<label onclick="event.preventDefault();wsToggleGram(${i},this)" style="display:flex;align-items:center;gap:8px;padding:4px 7px;border-radius:8px;cursor:pointer;font-size:12px;background:${on?'#fff':'transparent'};">
+          <input type="checkbox" ${on?'checked':''} style="width:13px;height:13px;pointer-events:none;flex:none;">
+          <span style="font-weight:700;color:#333;">${g.p}</span>
+          <span style="color:#aaa;font-size:10px;margin-left:auto;text-align:right;">${g.en}</span>
+        </label>`;
+      });
+    });
+    return h;
+  }
+  function gramPanelHTML(){
+    return `<details id="wsGramDetails" ${wsGramOpen?'open':''} ontoggle="window._wsGramOpenSet(this.open)" style="margin-top:10px;">
+      <summary style="cursor:pointer;font-size:12px;font-weight:800;color:#FF6B35;">Choose grammar points (<span id="wsGramCount">${wsGramSel.size}</span>/${GENKI_GRAMMAR.length} on)</summary>
+      <div style="display:flex;gap:6px;margin:8px 0 4px;">
+        <button onclick="wsGramAll(1)" style="font-size:11px;padding:3px 10px;border-radius:99px;border:2px solid #222;background:#222;color:#fff;font-family:var(--ui);font-weight:800;cursor:pointer;">All</button>
+        <button onclick="wsGramAll(0)" style="font-size:11px;padding:3px 10px;border-radius:99px;border:2px solid #ddd;background:#fff;color:#666;font-family:var(--ui);font-weight:800;cursor:pointer;">Clear</button>
+      </div>
+      <div id="wsGramList" style="max-height:220px;overflow-y:auto;border:1px solid #f0e0da;background:#fff;border-radius:10px;padding:4px 8px 8px;-webkit-overflow-scrolling:touch;">${gramListHTML()}</div>
+      <div style="font-size:11px;color:#aaa;margin-top:6px;line-height:1.5;">Only checked grammar is used. It is still limited to Lessons 1…N−1 for each kanji (and the range above).</div>
+    </details>`;
+  }
 
   function esc(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 
@@ -953,6 +992,7 @@ function showWorksheetDialog(name,weak){
           <button onclick="wsSetGramScope('recent')" style="padding:5px 12px;border-radius:99px;border:2px solid ${wsGramScope==='recent'?'#FF6B35':'#ddd'};background:${wsGramScope==='recent'?'#FF6B35':'#fff'};color:${wsGramScope==='recent'?'#fff':'#666'};font-family:var(--ui);font-weight:800;font-size:12px;cursor:pointer;">Last 2 lessons</button>
         </div>
         <div style="font-size:11px;color:#aaa;margin-top:6px;line-height:1.5;">Kanji from Lesson N uses grammar up to Lesson N−1 only. (e.g. L7 kanji → grammar up to L6, no L7 grammar)</div>
+        ${gramPanelHTML()}
       </div>
 
       <div id="wsWarn" style="display:${total===0?'block':'none'};margin-top:12px;padding:10px;background:#fff7f5;border-radius:10px;color:#FF6B35;font-size:13px;font-weight:700;">⚠️ No words selected!</div>
@@ -968,6 +1008,38 @@ function showWorksheetDialog(name,weak){
   window.wsSetMode=m=>{syncParts();wsMode=m;renderDialog();};
 
   window.wsSetGramScope=s=>{syncParts();wsGramScope=s;window._wsGramScope=s;renderDialog();};
+
+  window._wsGramOpenSet=o=>{wsGramOpen=!!o;};
+
+  function wsGramRefreshCount(){
+    const c=document.getElementById('wsGramCount');
+    if(c)c.textContent=wsGramSel.size;
+  }
+  function wsGramRefreshList(){
+    const list=document.getElementById('wsGramList');
+    if(list){const st=list.scrollTop;list.innerHTML=gramListHTML();list.scrollTop=st;}
+    wsGramRefreshCount();
+  }
+  window.wsToggleGram=(i,el)=>{
+    const g=GENKI_GRAMMAR[i];
+    if(!g)return;
+    if(wsGramSel.has(g.p))wsGramSel.delete(g.p);else wsGramSel.add(g.p);
+    const on=wsGramSel.has(g.p);
+    if(el){
+      el.style.background=on?'#fff':'transparent';
+      const cb=el.querySelector('input[type=checkbox]');
+      if(cb)cb.checked=on;
+    }
+    wsGramRefreshCount();
+  };
+  window.wsGramLesson=(l,flag)=>{
+    GENKI_GRAMMAR.forEach(g=>{if(g.l===l){if(flag)wsGramSel.add(g.p);else wsGramSel.delete(g.p);}});
+    wsGramRefreshList();
+  };
+  window.wsGramAll=flag=>{
+    GENKI_GRAMMAR.forEach(g=>{if(flag)wsGramSel.add(g.p);else wsGramSel.delete(g.p);});
+    wsGramRefreshList();
+  };
 
   window.wsSetUnit=l=>{
     wsSelectedUnit=String(l);
@@ -1158,6 +1230,7 @@ function generateWorksheet(name,weak){
   const p5on=document.getElementById('ws5on').checked;
   const p5n=parseInt(document.getElementById('ws5n').value);
   const gramScope=window._wsGramScope||'all';
+  const gramSel=window._wsGramSel||new Set(GENKI_GRAMMAR.map(g=>g.p));
 
   document.getElementById('wsDialog').remove();
 
@@ -1178,7 +1251,10 @@ function generateWorksheet(name,weak){
     const lesson=getLessonForWord(w.word,w.reading)||12;
     const maxL=lesson-1;
     const minL=gramScope==='recent'?Math.max(1,maxL-1):1;
-    let cands=GENKI_GRAMMAR.filter(g=>g.l>=minL&&g.l<=maxL);
+    const inRange=GENKI_GRAMMAR.filter(g=>g.l>=minL&&g.l<=maxL);
+    // Only grammar the teacher checked; if none of the checked ones fit this kanji's lesson range, fall back to the range itself
+    let cands=inRange.filter(g=>gramSel.has(g.p));
+    if(cands.length===0)cands=inRange;
     const fresh=cands.filter(g=>!usedGram.has(g.p));
     if(fresh.length>0)cands=fresh;
     const g=cands[Math.floor(Math.random()*cands.length)];
