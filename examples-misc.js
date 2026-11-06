@@ -101,11 +101,10 @@ nG('~ too / also (も)',(w,e)=>['わたしは'+w+'も好きです。','I like '+
 // ── one-off examples for word + grammar pairs that had no answer (from real worksheets) ──
 const one=(label,word,ja,en)=>EX.add(label,w=>w===word?[ja,en]:null);
 one('Because ~ (から)','新幹線','新幹線は便利ですから、よく乗ります。','The bullet train is convenient, so I often take it.');
-one('Polite past verb','次女','わたしの次女は昨日、京都に行きました。','My second daughter went to Kyoto yesterday.');
-one('is not (noun)','電気','これは電気じゃないです。ガスです。',"This isn't electricity. It's gas.");
+one('Polite past verb','次女','次女は昨日、二十歳になりました。','My second daughter turned 20 yesterday.');
+one('is not (noun)','電気','これは電気じゃないです。ライトです。',"This isn't electricity. It's a light.");
 one('State / result (ている)','駐車場','駐車場に車が止まっています。','A car is parked in the parking lot.');
 one('Yes/no question with か','何時','今、何時か分かりますか。','Do you know what time it is now?');
-one('Please do ~ (te-form)','思う','そう思ってください。','Please think of it that way.');
 // "Because ~ (から)" for everyday actions: tomorrow is a day off, so …
 EX.vpg('Because ~ (から)','l',v=>['明日は休みですから、'+v.J.masu+'。','Because tomorrow is a day off, I will '+EX.E(v,'base')+'.']);
 })();
