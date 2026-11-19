@@ -200,7 +200,9 @@ let currentStudent=null;
 let isTeacher=false;
 
 async function login(name){
-  let {data,error}=await supa.from('students').select('*').eq('name',name).single();
+  const esc=name.replace(/[\\%_]/g,'\\$&');
+  let {data:found}=await supa.from('students').select('*').ilike('name',esc).order('created_at').limit(1);
+  let data=found&&found[0], error=null;
   if(error||!data){
     const res=await supa.from('students').insert({name}).select().single();
     data=res.data;
@@ -323,6 +325,7 @@ function checkInactivity(){
 }
 
 function logout(){
+  try{sessionStorage.setItem('jrSkipAuto','1');}catch(e){}
   currentStudent=null;
   stopInactivityTimer();
   try{
@@ -2959,6 +2962,15 @@ function setOrd(v){P.order=v;P.deck=deck(cur);P.idx=0;}
     lastActive=parseInt(localStorage.getItem('kanjiPracticeLastActive')||'0');
   }catch(e){}
 
+  // The student page (Natsuki's Japanese Room) leaves the signed-in student's name here, so they don't have to type it.
+  let roomName=null, skip=false;
+  try{ roomName=localStorage.getItem('jr_student'); skip=sessionStorage.getItem('jrSkipAuto')==='1'; }catch(e){}
+  if(roomName&&!skip){
+    renderLogin();
+    document.getElementById('loginScreen').innerHTML+='<div style="text-align:center;color:#aaa;font-size:13px;margin-top:12px;">Logging in as '+roomName.replace(/[<>&]/g,'')+'...</div>';
+    login(roomName);
+    return;
+  }
   const expired=!lastActive||(Date.now()-lastActive>5*60*1000);
 
   if(savedName&&!expired){
