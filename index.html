@@ -155,6 +155,16 @@ body{font-family:var(--ui);background:#f8f9ff;min-height:100vh;display:flex;flex
 .kday-detail{display:none;background:#fff;border:2px solid #eee;border-radius:14px;padding:14px 16px;margin:-2px 0 10px;}
 .kday-detail.open{display:block;}
 @media(max-width:600px){.kday-row{grid-template-columns:96px 1fr 120px;}.kday-date{font-size:11px;}}
+
+/* ── Unit progress cards (tap for analysis) ── */
+.kunit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-items:start;}
+.kunit-card{background:#fff;border:2px solid #eee;border-radius:20px;padding:16px 20px 14px;cursor:pointer;transition:all .15s;}
+.kunit-card:hover{border-color:#bbb;transform:translateY(-1px);}
+.kunit-card.open{border-color:#999;}
+.kunit-card.open .kday-caret{transform:rotate(90deg);}
+.kunit-detail{display:none;grid-column:1/-1;background:#fff;border:2px solid #eee;border-radius:20px;padding:18px 20px;margin:-4px 0 6px;}
+.kunit-detail.open{display:block;}
+.kunit-detail details summary{outline:none;}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -532,7 +542,7 @@ function kanjiFeedbackSummary(an){
   return parts.join(' ');
 }
 
-function renderKanjiFeedbackHTML(an){
+function renderKanjiFeedbackHTML(an,ctx){
   if(an.total<10){
     return '<div class="kfb-empty">Not enough data for personalized feedback yet — after a few more study sessions, strengths and areas to work on will appear here automatically! 🌱</div>';
   }
@@ -572,6 +582,420 @@ function renderKanjiFeedbackHTML(an){
       <div class="kfb-card g"><div class="kfb-card-t">💪 Strengths（得意）</div>${strengthsHTML}</div>
       <div class="kfb-card i"><div class="kfb-card-t">🌱 Improved（できるようになった）</div>${improvedHTML}</div>
       <div class="kfb-card w"><div class="kfb-card-t">🎯 Needs practice（苦手）</div>${weakHTML}</div>
+    </div>${ctx?kanjiOverallExtras(ctx.hist,ctx.prog):''}`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Unit progress (tap a unit → detailed analysis) + richer overall analysis.
+// Shared by the student History page and the teacher's student detail.
+// Inputs: `progress` rows (current status per word) and `progress_history`
+// rows (every answer). No database changes needed.
+// ══════════════════════════════════════════════════════════════════
+
+function kanjiProgMap(prog){
+  const m=new Map();
+  (prog||[]).forEach(p=>m.set(p.word+'|'+p.reading,p.status));
+  return m;
+}
+
+// got / total words per unit (each entry in the unit's word list counts, same as the flashcard counter)
+function kanjiUnitProgress(prog){
+  const pm=kanjiProgMap(prog);
+  const out={};
+  Object.keys(FLASH).forEach(l=>{
+    const total=FLASH[l].length;
+    const got=FLASH[l].filter(w=>pm.get(w.k+'|'+w.r)==='got').length;
+    out[l]={got,total,pct:total?Math.round(got/total*100):0};
+  });
+  return out;
+}
+
+const KQ_ORDER=['flashcard','mix','reading','typing'];
+const KQ_DESC={
+  flashcard:'Flashcards (self-check)',
+  mix:'Mixed Quiz',
+  reading:'Reading Quiz (kanji → reading)',
+  typing:'Typing Quiz (reading → kanji)'
+};
+
+function kPct(a,b){return b?Math.round(a/b*100):0;}
+function kDateStr(d){return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
+
+// ── Analysis of one unit ──
+function analyzeKanjiUnit(l,hist,prog){
+  const pm=kanjiProgMap(prog);
+  const isOK=r=>r.status==='got';
+  const rows=(hist||[]).filter(r=>String(r.lesson)===String(l))
+    .sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0));
+
+  const byWord=new Map();
+  rows.forEach(r=>{
+    const k=r.word+'|'+r.reading;
+    if(!byWord.has(k))byWord.set(k,[]);
+    byWord.get(k).push(r);
+  });
+
+  // unique words of this unit
+  const seen=new Set();
+  const uniq=[];
+  (FLASH[l]||[]).forEach(w=>{
+    const k=w.k+'|'+w.r;
+    if(!seen.has(k)){seen.add(k);uniq.push(w);}
+  });
+
+  const words=uniq.map(w=>{
+    const k=w.k+'|'+w.r;
+    const list=byWord.get(k)||[];
+    const miss=list.filter(r=>!isOK(r)).length;
+    const last=list[list.length-1];
+    const missTypes={};
+    list.filter(r=>!isOK(r)).forEach(r=>{
+      const q=r.quiz_type||'flashcard';
+      missTypes[q]=(missTypes[q]||0)+1;
+    });
+    return {w,k,attempts:list.length,miss,ok:list.length-miss,
+      status:pm.get(k)||null,lastOK:last?isOK(last):null,missTypes};
+  });
+
+  const mastered=words.filter(x=>x.status==='got');
+  const learning=words.filter(x=>x.status&&x.status!=='got');
+  const untried=words.filter(x=>!x.status&&x.attempts===0);
+  // words that used to be missed but are now correct
+  const conquered=words.filter(x=>x.miss>0&&x.status==='got'&&x.lastOK!==false)
+    .sort((a,b)=>b.miss-a.miss);
+  // still tricky: currently not "got", or got but wrong most of the time
+  const tricky=words.filter(x=>x.miss>0&&(x.status!=='got'||(x.attempts>=3&&x.miss/x.attempts>=0.5)))
+    .sort((a,b)=>b.miss-a.miss||(b.miss/b.attempts)-(a.miss/a.attempts));
+  // got it on the very first try and never missed
+  const clean=words.filter(x=>x.status==='got'&&x.miss===0&&x.attempts>0);
+
+  // per-quiz-type accuracy
+  const qt=[];
+  KQ_ORDER.forEach(q=>{
+    const list=rows.filter(r=>(r.quiz_type||'flashcard')===q);
+    if(list.length)qt.push({key:q,total:list.length,ok:list.filter(isOK).length,acc:kPct(list.filter(isOK).length,list.length)});
+  });
+  const qtGet=k=>qt.find(x=>x.key===k);
+
+  // per-kanji accuracy (answers on words containing that kanji)
+  const chars=((KANJI[l]&&KANJI[l].kanji)||[]).map(k=>k.char);
+  const kanjiStats=chars.map(ch=>{
+    const list=rows.filter(r=>(r.word||'').includes(ch));
+    const ok=list.filter(isOK).length;
+    return {ch,total:list.length,ok,acc:kPct(ok,list.length)};
+  }).filter(x=>x.total>0);
+  const weakKanji=kanjiStats.filter(x=>x.total>=3&&x.acc<=65).sort((a,b)=>a.acc-b.acc||b.total-a.total);
+  const strongKanji=kanjiStats.filter(x=>x.total>=4&&x.acc>=90).sort((a,b)=>b.total-a.total);
+
+  // trend: first half vs. recent answers
+  const total=rows.length;
+  const okN=rows.filter(isOK).length;
+  let firstAcc=null,recentAcc=null;
+  if(total>=8){
+    const half=Math.floor(total/2);
+    firstAcc=kPct(rows.slice(0,half).filter(isOK).length,half);
+    const rec=rows.slice(-Math.min(10,total));
+    recentAcc=kPct(rec.filter(isOK).length,rec.length);
+  }
+  const dayKeys=new Set(rows.map(r=>new Date(r.created_at).toDateString()));
+
+  return {
+    l,total,okN,acc:kPct(okN,total),words,mastered,learning,untried,conquered,tricky,clean,
+    qt,qtGet,weakKanji,strongKanji,firstAcc,recentAcc,
+    days:dayKeys.size,
+    lastStudied:rows.length?rows[rows.length-1].created_at:null,
+    uniqTotal:uniq.length
+  };
+}
+
+function kUnitChip(x,mode){
+  const w=x.w;
+  let tag='';
+  if(mode==='miss'){
+    const types=Object.keys(x.missTypes).map(q=>KQT_SHORT[q]||q).join('/');
+    tag=`<span style="font-size:10px;color:#FF6B35;font-weight:900;margin-left:5px;">✗${x.miss}/${x.attempts}${types?' · '+types:''}</span>`;
+  }else if(mode==='won'){
+    tag=`<span style="font-size:10px;color:#2ECC71;font-weight:900;margin-left:5px;">✗${x.miss}→✓</span>`;
+  }
+  const border=mode==='miss'?'#FF6B35':(mode==='won'?'#2ECC71':'#ddd');
+  return `<span class="kfb-chip" style="border-color:${border};">${kEsc(w.k)}<span style="font-size:10px;opacity:.7;">（${kEsc(w.r)}）</span>${tag}</span>`;
+}
+
+function kUnitNarrative(un,uprog){
+  const parts=[];
+  if(un.total===0&&uprog.got===0){
+    return `Not started yet — once you practice this unit, your strengths and trouble spots will show up here. 🌱`;
+  }
+  parts.push(`You've got <b>${uprog.got} of ${uprog.total}</b> words (${uprog.pct}%)${un.total?` and answered ${un.total} times with <b>${un.acc}%</b> correct`:''}.`);
+  if(un.firstAcc!==null&&un.recentAcc!==null){
+    const d=un.recentAcc-un.firstAcc;
+    if(d>=15)parts.push(`📈 Big improvement: ${un.firstAcc}% early on → ${un.recentAcc}% recently.`);
+    else if(d<=-15)parts.push(`Recent answers (${un.recentAcc}%) are lower than earlier (${un.firstAcc}%) — a quick review would help.`);
+  }
+  if(un.strongKanji.length)parts.push(`💪 Strong kanji: ${un.strongKanji.slice(0,4).map(x=>`<b>${kEsc(x.ch)}</b>`).join(' ')}.`);
+  if(un.weakKanji.length)parts.push(`🎯 Watch out for: ${un.weakKanji.slice(0,4).map(x=>`<b>${kEsc(x.ch)}</b> (${x.acc}%)`).join(', ')}.`);
+  if(un.conquered.length)parts.push(`✨ ${un.conquered.length} word${un.conquered.length>1?'s':''} you used to miss ${un.conquered.length>1?'are':'is'} now correct.`);
+  const rd=un.qtGet('reading'),ty=un.qtGet('typing');
+  if(rd&&ty&&rd.total>=5&&ty.total>=5){
+    if(rd.acc-ty.acc>=20)parts.push(`Reading is solid (${rd.acc}%) but typing the kanji is harder (${ty.acc}%) — more Typing Quiz will help recall.`);
+    else if(ty.acc-rd.acc>=20)parts.push(`Typing (${ty.acc}%) is stronger than reading (${rd.acc}%) — try more Reading Quiz.`);
+  }
+  if(un.untried.length&&un.untried.length<un.uniqTotal)parts.push(`${un.untried.length} word${un.untried.length>1?'s':''} not tried yet.`);
+  return parts.join(' ');
+}
+
+function renderKanjiUnitDetailHTML(l,un,uprog){
+  const col=HEX[l]||'#555';
+  const chipBox=(arr,mode,max)=>arr.slice(0,max).map(x=>kUnitChip(x,mode)).join('');
+  let h='';
+  h+=`<div class="kfb-summary" style="margin-bottom:12px;">${kUnitNarrative(un,uprog)}</div>`;
+
+  // numbers
+  h+=`<div class="kstat-row" style="margin-bottom:12px;">
+    <div class="kstat"><div class="kstat-n" style="color:#2ECC71;">${un.mastered.length}</div><div class="kstat-l">Got it</div></div>
+    <div class="kstat"><div class="kstat-n" style="color:#FF6B35;">${un.learning.length}</div><div class="kstat-l">Still learning</div></div>
+    <div class="kstat"><div class="kstat-n" style="color:#aaa;">${un.untried.length}</div><div class="kstat-l">Not tried</div></div>
+    <div class="kstat"><div class="kstat-n">${un.total?un.acc+'%':'–'}</div><div class="kstat-l">Accuracy${un.total?` (${un.total})`:''}</div></div>
+  </div>`;
+  if(un.total){
+    h+=`<div style="font-size:11.5px;color:#999;font-weight:700;margin-bottom:12px;">Studied on ${un.days} day${un.days>1?'s':''} · last: ${kDateStr(un.lastStudied)}</div>`;
+  }
+
+  // quiz types
+  if(un.qt.length){
+    h+=`<div class="kfb-card-t">By quiz type（クイズの種類別）</div><div style="margin-bottom:14px;">`;
+    h+=un.qt.map(q=>`<div class="kfb-item">
+      <div class="kfb-item-top"><span>${kEsc(KQ_DESC[q.key]||q.key)}</span><span style="color:#888;">${q.acc}%</span></div>
+      <div class="kfb-meter"><div class="kfb-meter-fill" style="width:${q.acc}%;background:${col};"></div></div>
+      <div class="kfb-note">${q.ok}/${q.total} correct</div></div>`).join('');
+    h+='</div>';
+  }
+
+  // tricky words
+  h+=`<div class="kfb-card-t">🎯 Needs practice（苦手）</div>`;
+  if(un.tricky.length){
+    h+=`<div style="margin-bottom:6px;">${chipBox(un.tricky,'miss',16)}</div>
+      <div class="kfb-note" style="margin-bottom:14px;">✗ missed / tried · FC=Flashcard, MQ=Mixed, RQ=Reading, TQ=Typing${un.tricky.length>16?` · +${un.tricky.length-16} more`:''}</div>`;
+  }else{
+    h+=`<div class="kfb-empty" style="margin-bottom:14px;">${un.total?'No trouble spots right now — nice! 🎉':'Nothing yet.'}</div>`;
+  }
+
+  // weak / strong kanji
+  if(un.weakKanji.length||un.strongKanji.length){
+    h+=`<div class="kfb-card-t">Kanji by kanji（漢字ごと）</div>`;
+    if(un.weakKanji.length){
+      h+=`<div style="margin-bottom:6px;">`+un.weakKanji.slice(0,6).map(x=>
+        `<span class="kfb-chip" style="border-color:#FF6B35;font-family:var(--serif);font-size:15px;">${kEsc(x.ch)}<span style="font-family:var(--ui);font-size:10px;color:#FF6B35;font-weight:900;margin-left:5px;">${x.acc}% (${x.ok}/${x.total})</span></span>`).join('')+`</div>`;
+    }
+    if(un.strongKanji.length){
+      h+=`<div style="margin-bottom:6px;">`+un.strongKanji.slice(0,8).map(x=>
+        `<span class="kfb-chip" style="border-color:#2ECC71;font-family:var(--serif);font-size:15px;">${kEsc(x.ch)}<span style="font-family:var(--ui);font-size:10px;color:#2ECC71;font-weight:900;margin-left:5px;">${x.acc}%</span></span>`).join('')+`</div>`;
+    }
+    h+=`<div class="kfb-note" style="margin-bottom:14px;">Accuracy on every word that contains that kanji (orange = trouble, green = strong).</div>`;
+  }
+
+  // now readable
+  h+=`<div class="kfb-card-t">✨ Now you can do these（できるようになった）</div>`;
+  if(un.conquered.length){
+    h+=`<div style="margin-bottom:14px;">${chipBox(un.conquered,'won',20)}</div>`;
+  }else{
+    h+=`<div class="kfb-empty" style="margin-bottom:14px;">Words you missed before and then got right will appear here.</div>`;
+  }
+
+  // collapsible full lists
+  if(un.mastered.length){
+    h+=`<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-size:12.5px;font-weight:900;color:#2ECC71;">✅ All "Got it" words (${un.mastered.length})</summary><div style="margin-top:8px;">${chipBox(un.mastered,'',200)}</div></details>`;
+  }
+  if(un.untried.length){
+    h+=`<details><summary style="cursor:pointer;font-size:12.5px;font-weight:900;color:#999;">⏳ Not tried yet (${un.untried.length})</summary><div style="margin-top:8px;">${chipBox(un.untried,'',200)}</div></details>`;
+  }
+  return h;
+}
+
+// Unit cards (same look as the teacher dashboard); tap a card to open its analysis.
+function renderKanjiUnitProgressHTML(prog,hist,idPrefix){
+  const up=kanjiUnitProgress(prog);
+  const units=Object.keys(up).sort((a,b)=>parseInt(a)-parseInt(b));
+  const cards=units.map(l=>{
+    const s=up[l];
+    const col=HEX[l]||'#555';
+    const id=idPrefix+'-u'+l;
+    const un=analyzeKanjiUnit(l,hist,prog);
+    return `<div class="kunit-card" data-target="${id}" role="button" tabindex="0" title="Tap for details">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:15px;font-weight:900;color:${col};">U${l}</span>
+          <span style="font-size:11px;color:#bbb;font-weight:800;"><span class="kday-caret" style="margin:0 3px 0 6px;">▶</span>details</span>
+          <span style="font-size:15px;font-weight:900;color:#888;margin-left:auto;">${s.pct}%</span>
+        </div>
+        <div style="height:9px;background:#f0f0f0;border-radius:99px;overflow:hidden;margin-bottom:8px;">
+          <div style="height:100%;background:${col};width:${s.pct}%;border-radius:99px;"></div>
+        </div>
+        <div style="font-size:12px;color:#aaa;font-weight:600;">${s.got} / ${s.total} words</div>
+      </div>
+      <div class="kunit-detail" id="${id}">
+        <div style="font-size:15px;font-weight:900;color:${col};margin-bottom:10px;">Unit ${l} — details</div>
+        ${renderKanjiUnitDetailHTML(l,un,s)}
+      </div>`;
+  }).join('');
+  return `<div style="margin:22px 0;">
+      <div style="font-size:15px;font-weight:900;margin-bottom:4px;">Progress by Unit</div>
+      <div class="kday-hint">Tap a unit to see what's strong, what's tricky, and what you can do now</div>
+      <div class="kunit-grid">${cards}</div>
+    </div>`;
+}
+
+// delegated toggle for unit cards
+document.addEventListener('click',e=>{
+  const card=e.target.closest('.kunit-card');
+  if(!card)return;
+  const detail=document.getElementById(card.dataset.target);
+  if(!detail)return;
+  const open=!detail.classList.contains('open');
+  detail.classList.toggle('open',open);
+  card.classList.toggle('open',open);
+});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter'&&e.key!==' ')return;
+  const card=e.target.closest&&e.target.closest('.kunit-card');
+  if(!card)return;
+  e.preventDefault();
+  card.click();
+});
+
+// ── Richer overall analysis (shown under the three feedback cards) ──
+function kanjiOverallExtras(hist,prog){
+  const isOK=r=>r.status==='got';
+  const rows=[...(hist||[])].sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0));
+  if(rows.length<10)return '';
+  const days=kanjiDayGroups(rows).slice().reverse(); // oldest → newest
+  const nDays=days.length;
+
+  // streak (consecutive study days ending today or yesterday)
+  const dayNum=d=>Math.floor(new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime()/86400000);
+  const nums=days.map(d=>dayNum(d.date));
+  const today=dayNum(new Date());
+  let streak=0;
+  if(nums.length&&today-nums[nums.length-1]<=1){
+    streak=1;
+    for(let i=nums.length-1;i>0;i--){if(nums[i]-nums[i-1]===1)streak++;else break;}
+  }
+  const last7=rows.filter(r=>today-dayNum(new Date(r.created_at))<7);
+  const prev7=rows.filter(r=>{const d=today-dayNum(new Date(r.created_at));return d>=7&&d<14;});
+  const bestDay=days.reduce((b,d)=>(d.got+d.miss>b.got+b.miss?d:b),days[0]);
+  const lastDate=days[days.length-1].date;
+  const sinceLast=today-dayNum(lastDate);
+
+  // word mastery overview
+  const up=kanjiUnitProgress(prog);
+  const pm=kanjiProgMap(prog);
+  let totalW=0,gotW=0,learnW=0;
+  Object.keys(FLASH).forEach(l=>FLASH[l].forEach(w=>{
+    totalW++;
+    const s=pm.get(w.k+'|'+w.r);
+    if(s==='got')gotW++;else if(s)learnW++;
+  }));
+  const newW=totalW-gotW-learnW;
+
+  // quiz types
+  const qt=KQ_ORDER.map(q=>{
+    const list=rows.filter(r=>(r.quiz_type||'flashcard')===q);
+    return {key:q,total:list.length,acc:kPct(list.filter(isOK).length,list.length)};
+  }).filter(x=>x.total>0);
+
+  // chart: last 14 study days
+  const series=days.slice(-14);
+  const maxTot=Math.max(...series.map(d=>d.got+d.miss));
+  const chart=series.map(d=>{
+    const t=d.got+d.miss,hh=Math.max(8,Math.round(t/maxTot*84));
+    const okH=Math.round(d.got/t*hh);
+    const acc=kPct(d.got,t);
+    const lab=(d.date.getMonth()+1)+'/'+d.date.getDate();
+    return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;">
+      <div style="font-size:9px;font-weight:800;color:#888;">${acc}%</div>
+      <div style="width:70%;max-width:26px;height:${hh}px;display:flex;flex-direction:column;justify-content:flex-end;border-radius:5px;overflow:hidden;background:#ffe3d8;" title="${lab}: ✓${d.got} ✗${d.miss}">
+        <div style="height:${okH}px;background:#2ECC71;"></div>
+      </div>
+      <div style="font-size:9px;color:#aaa;font-weight:700;">${lab}</div>
+    </div>`;
+  }).join('');
+
+  // hardest words overall
+  const byWord=new Map();
+  rows.forEach(r=>{
+    const k=r.word+'|'+r.reading;
+    if(!byWord.has(k))byWord.set(k,[]);
+    byWord.get(k).push(r);
+  });
+  const hardest=[];
+  byWord.forEach(list=>{
+    const miss=list.filter(r=>!isOK(r)).length;
+    if(miss>=2){
+      const last=list[list.length-1];
+      hardest.push({row:last,miss,n:list.length,now:pm.get(last.word+'|'+last.reading)==='got'});
+    }
+  });
+  hardest.sort((a,b)=>b.miss-a.miss||(b.miss/b.n)-(a.miss/a.n));
+
+  // next steps
+  const steps=[];
+  const stillTricky=hardest.filter(x=>!x.now);
+  if(stillTricky.length){
+    steps.push(`🔁 Review the words you keep missing — ${stillTricky.slice(0,3).map(x=>kEsc(x.row.word)).join('、')}${stillTricky.length>3?' …':''} (Settings → "Still learning only").`);
+  }
+  const started=Object.keys(up).filter(l=>up[l].pct>=50&&up[l].pct<100).sort((a,b)=>up[a].pct-up[b].pct)[0];
+  if(started){
+    steps.push(`🏁 Finish <b>Unit ${started}</b> — ${up[started].total-up[started].got} word${up[started].total-up[started].got>1?'s':''} left (${up[started].pct}%).`);
+  }
+  const fresh=Object.keys(up).sort((a,b)=>parseInt(a)-parseInt(b)).find(l=>up[l].pct<20);
+  if(fresh&&fresh!==started)steps.push(`🌱 Start <b>Unit ${fresh}</b> when you're ready (${up[fresh].got}/${up[fresh].total}).`);
+  const rd=qt.find(q=>q.key==='reading'),ty=qt.find(q=>q.key==='typing');
+  if(rd&&ty&&rd.total>=8&&ty.total>=8&&Math.abs(rd.acc-ty.acc)>=15){
+    steps.push(rd.acc>ty.acc
+      ?`⌨️ Reading (${rd.acc}%) is ahead of Typing (${ty.acc}%) — do a few Typing Quizzes to lock in the kanji shapes.`
+      :`👀 Typing (${ty.acc}%) is ahead of Reading (${rd.acc}%) — a few Reading Quizzes will help.`);
+  }
+  if(sinceLast>=3)steps.push(`⏰ It's been ${sinceLast} days — even 5 minutes today keeps the readings fresh.`);
+  else if(prev7.length&&last7.length<prev7.length*0.6)steps.push(`📉 Fewer answers this week (${last7.length}) than last week (${prev7.length}) — short, regular sessions work best.`);
+
+  const hardChip=x=>`<span class="kfb-chip" style="border-color:${x.now?'#ddd':'#FF6B35'};">${kEsc(x.row.word)}<span style="font-size:10px;opacity:.7;">（${kEsc(x.row.reading)}）</span><span style="font-size:10px;color:#FF6B35;font-weight:900;margin-left:5px;">✗${x.miss}/${x.n}${x.now?' ✓now':''}</span><span style="font-size:9px;color:#aaa;margin-left:4px;">U${kEsc(x.row.lesson)}</span></span>`;
+
+  return `
+    <div style="margin-top:18px;border-top:2px solid #f0f0f0;padding-top:16px;">
+      <div class="kfb-card-t" style="font-size:14px;">📊 Overall analysis（全体の分析）</div>
+      <div class="kstat-row">
+        <div class="kstat"><div class="kstat-n" style="color:#2ECC71;">${gotW}</div><div class="kstat-l">Got it / ${totalW}</div></div>
+        <div class="kstat"><div class="kstat-n" style="color:#FF6B35;">${learnW}</div><div class="kstat-l">Still learning</div></div>
+        <div class="kstat"><div class="kstat-n" style="color:#aaa;">${newW}</div><div class="kstat-l">Not tried</div></div>
+        <div class="kstat"><div class="kstat-n">${streak}</div><div class="kstat-l">Day streak 🔥</div></div>
+      </div>
+      <div class="kfb-grid">
+        <div class="kfb-card" style="border-top-color:#9B59B6;">
+          <div class="kfb-card-t">By quiz type（クイズ別）</div>
+          ${qt.map(q=>`<div class="kfb-item"><div class="kfb-item-top"><span>${kEsc(KQ_DESC[q.key]||q.key)}</span><span style="color:#888;">${q.acc}%</span></div><div class="kfb-meter"><div class="kfb-meter-fill" style="width:${q.acc}%;background:#9B59B6;"></div></div><div class="kfb-note">${q.total} answers</div></div>`).join('')}
+        </div>
+        <div class="kfb-card" style="border-top-color:#3498DB;">
+          <div class="kfb-card-t">Study habits（学習の習慣）</div>
+          <div style="font-size:12.5px;font-weight:700;color:#555;line-height:2;">
+            📅 ${nDays} study day${nDays>1?'s':''} · avg ${Math.round(rows.length/nDays)} answers/day<br>
+            🗓 Last 7 days: <b>${last7.length}</b> answers${prev7.length?` (before that: ${prev7.length})`:''}<br>
+            🏆 Busiest day: ${kDateStr(bestDay.date)} (${bestDay.got+bestDay.miss})<br>
+            ⏱ Last studied: ${kDateStr(lastDate)}${sinceLast>0?` (${sinceLast} day${sinceLast>1?'s':''} ago)`:' (today)'}
+          </div>
+        </div>
+      </div>
+      <div class="kfb-card" style="margin-top:12px;border-top-color:#2ECC71;">
+        <div class="kfb-card-t">Accuracy by study day (last ${series.length})<span style="font-weight:700;color:#aaa;font-size:11px;"> — green = correct, orange = missed, bar height = answers</span></div>
+        <div style="display:flex;align-items:flex-end;gap:4px;height:130px;">${chart}</div>
+      </div>
+      ${hardest.length?`<div class="kfb-card" style="margin-top:12px;border-top-color:#FF6B35;">
+        <div class="kfb-card-t">Most-missed words（よく間違える言葉）</div>
+        <div>${hardest.slice(0,12).map(hardChip).join('')}</div>
+        <div class="kfb-note" style="margin-top:6px;">✗ missed / tried · "✓now" = currently marked Got it · U = unit</div>
+      </div>`:''}
+      ${steps.length?`<div class="kfb-card" style="margin-top:12px;border-top-color:#F39C12;">
+        <div class="kfb-card-t">Suggested next steps（次にやること）</div>
+        <div style="font-size:13px;font-weight:600;color:#444;line-height:1.9;">${steps.map(s=>`<div>${s}</div>`).join('')}</div>
+      </div>`:''}
     </div>`;
 }
 
@@ -620,7 +1044,8 @@ async function showStudentDetail(studentId,studentName){
   const {data:prog}=await supa.from('progress').select('*').eq('student_id',studentId);
   const {data:hist}=await supa.from('progress_history').select('*').eq('student_id',studentId).order('created_at',{ascending:false}).range(0,9999);
   const weak=(prog||[]).filter(p=>p.status!=='got');
-  const got=(prog||[]).filter(p=>p.status==='got').length;
+  const _up=kanjiUnitProgress(prog||[]);
+  const got=Object.values(_up).reduce((a,u)=>a+u.got,0);
   const total=Object.values(FLASH).reduce((s,w)=>s+w.length,0);
   const weakCards=weak.map(p=>`<div class="weak-item"><div class="weak-kanji">${p.word}</div><div class="weak-read">${p.reading}</div></div>`).join('');
   // History with filter tabs
@@ -650,7 +1075,7 @@ async function showStudentDetail(studentId,studentName){
   }
   const histHTML=buildStudentHistHTML(hist||[],'all');
   const feedbackHTML=(hist&&hist.length>0)
-    ?`<div class="kfb-wrap"><div class="kfb-title">🤖 Auto Feedback（得意・苦手・できるようになった）</div>${renderKanjiFeedbackHTML(analyzeKanjiHist(hist))}</div>`
+    ?`<div class="kfb-wrap"><div class="kfb-title">🤖 Auto Feedback（得意・苦手・できるようになった）</div>${renderKanjiFeedbackHTML(analyzeKanjiHist(hist),{hist,prog})}</div>`
     :'';
 
   // ── This week's activity ──
@@ -683,36 +1108,8 @@ async function showStudentDetail(studentId,studentName){
       </div>
     </div>`;
 
-  // ── Per-unit accuracy ──
-  const unitStats={};
-  Object.keys(FLASH).forEach(l=>{
-    const lessonWords=new Set(FLASH[l].map(w=>w.k+'|'+w.r));
-    const lessonProg=(prog||[]).filter(p=>lessonWords.has(p.word+'|'+p.reading));
-    const lessonGot=lessonProg.filter(p=>p.status==='got').length;
-    const lessonTotal=FLASH[l].length;
-    unitStats[l]={got:lessonGot,total:lessonTotal,pct:lessonTotal>0?Math.round(lessonGot/lessonTotal*100):0};
-  });
-
-  const unitStatsHTML=`
-    <div style="margin-top:24px;margin-bottom:24px;">
-      <div style="font-size:14px;font-weight:900;margin-bottom:12px;">Progress by Unit</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
-        ${Object.keys(unitStats).sort((a,b)=>parseInt(a)-parseInt(b)).map(l=>{
-          const s=unitStats[l];
-          const col=HEX[l];
-          return `<div style="background:#fff;border:2px solid #eee;border-radius:12px;padding:12px 14px;">
-            <div style="display:flex;align-items:center;justify-content:between;gap:8px;margin-bottom:6px;">
-              <span style="font-size:12px;font-weight:900;color:${col};">U${l}</span>
-              <span style="font-size:12px;font-weight:800;color:#888;margin-left:auto;">${s.pct}%</span>
-            </div>
-            <div style="height:6px;background:#f0f0f0;border-radius:99px;overflow:hidden;margin-bottom:6px;">
-              <div style="height:100%;background:${col};width:${s.pct}%;"></div>
-            </div>
-            <div style="font-size:11px;color:#aaa;">${s.got} / ${s.total} words</div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>`;
+  // ── Per-unit progress (tap a unit for analysis) ──
+  const unitStatsHTML=renderKanjiUnitProgressHTML(prog||[],hist||[],'tunit');
 
   document.getElementById('loginScreen').innerHTML=`
     <div class="dash-wrap">
@@ -2443,6 +2840,7 @@ async function renderHistory(filter){
   const main=document.getElementById('mainArea');
   main.innerHTML='<div style="padding:32px;text-align:center;color:#aaa;font-weight:700;">Loading...</div>';
   const {data:hist}=await supa.from('progress_history').select('*').eq('student_id',currentStudent.id).order('created_at',{ascending:false}).range(0,9999);
+  const {data:progRows}=await supa.from('progress').select('*').eq('student_id',currentStudent.id);
   if(!hist||hist.length===0){
     main.innerHTML='<div style="padding:48px;text-align:center;color:#aaa;font-weight:700;">No history yet</div>';
     return;
@@ -2472,7 +2870,8 @@ async function renderHistory(filter){
     <div class="kstat"><div class="kstat-n" style="color:#2ECC71;">${okN}</div><div class="kstat-l">Correct</div></div>
     <div class="kstat"><div class="kstat-n">${acc}%</div><div class="kstat-l">Accuracy</div></div>
   </div>`;
-  h+=`<div class="kfb-wrap"><div class="kfb-title">🤖 Your Feedback（得意・苦手・できるようになった）</div>${renderKanjiFeedbackHTML(an)}</div>`;
+  h+=renderKanjiUnitProgressHTML(progRows||[],hist,'myunit');
+  h+=`<div class="kfb-wrap"><div class="kfb-title">🤖 Your Feedback（得意・苦手・できるようになった）</div>${renderKanjiFeedbackHTML(an,{hist,prog:progRows||[]})}</div>`;
   h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">';
   filters.forEach(f=>{
     const active=activeFilter===f.key;
