@@ -292,7 +292,7 @@ function showApp(){
   render();
 }
 
-const INACTIVITY_LIMIT_MS=5*60*1000; // 5 minutes
+const INACTIVITY_LIMIT_MS=60*60*1000; // 60 minutes (sliding: every click/tap/key renews it)
 let inactivityTimerId=null;
 
 function startInactivityTimer(){
@@ -301,10 +301,20 @@ function startInactivityTimer(){
     document.addEventListener(evt,markActive,{passive:true});
   });
   inactivityTimerId=setInterval(checkInactivity,15000); // check every 15s
+  document.addEventListener('visibilitychange',onBackVisible);
+}
+
+// 戻ってきたとき: 離れていた時間が上限内なら、その時点からまた数え直す
+function onBackVisible(){
+  if(document.hidden||!currentStudent)return;
+  let last=0;
+  try{last=parseInt(localStorage.getItem('kanjiPracticeLastActive')||'0');}catch(e){}
+  if(last&&Date.now()-last>INACTIVITY_LIMIT_MS){logout();}else{markActive();}
 }
 
 function stopInactivityTimer(){
   if(inactivityTimerId){clearInterval(inactivityTimerId);inactivityTimerId=null;}
+  document.removeEventListener('visibilitychange',onBackVisible);
   ['click','keydown','touchstart','input'].forEach(evt=>{
     document.removeEventListener(evt,markActive);
   });
@@ -2953,7 +2963,7 @@ function selLNone(l){FLASH[l].forEach((_,i)=>{chk[l+'-'+i]=false;});P.deck=deck(
 function selLStillLearning(l){FLASH[l].forEach((_,i)=>{chk[l+'-'+i]=!mas[l+'-'+i];});P.deck=deck(cur);renderSettingsResults();}
 function setOrd(v){P.order=v;P.deck=deck(cur);P.idx=0;}
 
-// Try auto-login with saved name, but only if recently active (within 5 min)
+// Try auto-login with saved name, but only if recently active (within 60 min)
 (function(){
   let savedName=null;
   let lastActive=0;
@@ -2971,7 +2981,7 @@ function setOrd(v){P.order=v;P.deck=deck(cur);P.idx=0;}
     login(roomName);
     return;
   }
-  const expired=!lastActive||(Date.now()-lastActive>5*60*1000);
+  const expired=!lastActive||(Date.now()-lastActive>60*60*1000);
 
   if(savedName&&!expired){
     renderLogin();
